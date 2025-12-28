@@ -35,8 +35,10 @@ export function QRScanner({
       await scanner.start(
         { facingMode: 'environment' },
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+          fps: 15, // Higher FPS for faster scanning
+          qrbox: { width: 300, height: 300 }, // Larger scan area
+          aspectRatio: 1,
+          disableFlip: false,
         },
         (decodedText) => {
           // Success - stop scanning and return data

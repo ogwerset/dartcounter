@@ -291,7 +291,7 @@ export default function PairPage() {
         <div className="space-y-6">
           <QRDisplay
             data={offerData}
-            size={280}
+            size={320}
             label="Step 1: Slave scans this QR code"
           />
           
@@ -331,7 +331,7 @@ export default function PairPage() {
         <div className="space-y-6">
           <QRDisplay
             data={answerData}
-            size={280}
+            size={320}
             label="Step 2: Master scans this QR code"
           />
           
