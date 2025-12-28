@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { ArrowLeft, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MegaScore } from '@/components/game/mega-score';
@@ -10,6 +11,7 @@ import { LegIndicator } from '@/components/game/leg-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
 import { useGameStore } from '@/lib/stores/game-store';
 import { getCheckoutOptions } from '@/lib/game-logic/rules';
+import type { DataConnection } from 'peerjs';
 
 const VERSION = 'v1.0.0';
 
@@ -18,8 +20,80 @@ export default function SlavePage() {
   const { players, currentPlayerIndex, currentTurn, turnHistory, isGameActive, config } =
     useGameStore();
   
-  // Get PeerJS connection status from window (set during pairing)
+  // Get PeerJS connection from window (set during pairing)
+  const getConnection = (): DataConnection | null => {
+    if (typeof window !== 'undefined') {
+      return (window as any).__dartConnection || null;
+    }
+    return null;
+  };
+  
   const isConnected = typeof window !== 'undefined' && !!(window as any).__dartConnection;
+  
+  // Setup data listener when component mounts
+  useEffect(() => {
+    const conn = getConnection();
+    if (!conn) return;
+    
+    // Setup listener for incoming data
+    const handleData = (data: unknown) => {
+      console.log('[Slave] Received data:', data);
+      
+      if (data && typeof data === 'object' && 'type' in data) {
+        const payload = data as { type: string; data: unknown };
+        if (payload.type === 'game-sync') {
+          const gameData = payload.data as {
+            players: Array<{ currentScore: number; legsWon: number }>;
+            currentPlayerIndex: number;
+            currentTurn: Array<{ segment: number; multiplier: number; points: number }>;
+            turnHistory?: Array<{
+              playerId: string;
+              throws: Array<{ segment: number; multiplier: number; points: number }>;
+              totalPoints: number;
+              isBust: boolean;
+              timestamp: number;
+            }>;
+            currentLeg: number;
+          };
+          
+          const currentState = useGameStore.getState();
+          useGameStore.setState({
+            players: currentState.players.map((p, idx) => ({
+              ...p,
+              currentScore: gameData.players[idx]?.currentScore ?? p.currentScore,
+              legsWon: gameData.players[idx]?.legsWon ?? p.legsWon,
+            })) as [typeof currentState.players[0], typeof currentState.players[1]],
+            currentPlayerIndex: gameData.currentPlayerIndex as 0 | 1,
+            currentTurn: gameData.currentTurn.map((t) => ({
+              ...t,
+              multiplier: t.multiplier as 1 | 2 | 3,
+              timestamp: Date.now(),
+            })),
+            turnHistory: gameData.turnHistory ? gameData.turnHistory.map((turn) => ({
+              playerId: turn.playerId,
+              throws: turn.throws.map((t) => ({
+                segment: t.segment,
+                multiplier: t.multiplier as 1 | 2 | 3,
+                points: t.points,
+                timestamp: Date.now(),
+              })),
+              totalPoints: turn.totalPoints,
+              isBust: turn.isBust,
+              timestamp: turn.timestamp,
+            })) : currentState.turnHistory,
+            currentLeg: gameData.currentLeg,
+            isGameActive: true,
+          });
+        }
+      }
+    };
+    
+    conn.on('data', handleData);
+    
+    return () => {
+      conn.off('data', handleData);
+    };
+  }, []);
 
   if (!isGameActive) {
     return (

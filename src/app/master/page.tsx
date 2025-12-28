@@ -39,33 +39,46 @@ export default function MasterPage() {
   
   const isConnected = typeof window !== 'undefined' && !!(window as any).__dartConnection;
   
-  // Send game state to Slave whenever it changes
+  // Send game state to Slave
   const sendGameState = useCallback(() => {
     const conn = getConnection();
     if (conn && conn.open) {
+      const state = useGameStore.getState();
       conn.send({
         type: 'game-sync',
         data: {
-          players: players.map(p => ({
+          players: state.players.map(p => ({
             currentScore: p.currentScore,
             legsWon: p.legsWon,
           })),
-          currentPlayerIndex,
-          currentTurn: currentTurn.map(t => ({
+          currentPlayerIndex: state.currentPlayerIndex,
+          currentTurn: state.currentTurn.map(t => ({
             segment: t.segment,
             multiplier: t.multiplier,
             points: t.points,
           })),
-          currentLeg,
+          turnHistory: state.turnHistory.map(turn => ({
+            playerId: turn.playerId,
+            throws: turn.throws.map(t => ({
+              segment: t.segment,
+              multiplier: t.multiplier,
+              points: t.points,
+            })),
+            totalPoints: turn.totalPoints,
+            isBust: turn.isBust,
+            timestamp: turn.timestamp,
+          })),
+          currentLeg: state.currentLeg,
         },
       });
+      console.log('[Master] Sent game state');
     }
-  }, [getConnection, players, currentPlayerIndex, currentTurn, currentLeg]);
+  }, [getConnection]);
   
-  // Send state on every change
+  // Send state whenever relevant state changes
   useEffect(() => {
     sendGameState();
-  }, [sendGameState]);
+  }, [players, currentPlayerIndex, currentTurn, turnHistory, currentLeg, sendGameState]);
 
   if (!isGameActive) {
     return (
@@ -86,19 +99,27 @@ export default function MasterPage() {
   const handleThrow = (segment: number, multiplier: 1 | 2 | 3): void => {
     if (currentTurn.length >= 3) return;
     addThrow({ segment, multiplier });
+    // Send state immediately after throw
+    setTimeout(() => sendGameState(), 50);
   };
 
   const handleMiss = (): void => {
     if (currentTurn.length >= 3) return;
     addThrow({ segment: 0, multiplier: 1 });
+    // Send state immediately after miss
+    setTimeout(() => sendGameState(), 50);
   };
 
   const handleNext = (): void => {
     completeTurn();
-    // Auto-switch to next player after a short delay
+    // Send state after completing turn
     setTimeout(() => {
+      sendGameState();
+      // Auto-switch to next player
       nextPlayer();
-    }, 500);
+      // Send state after switching player
+      setTimeout(() => sendGameState(), 100);
+    }, 100);
   };
 
   return (
