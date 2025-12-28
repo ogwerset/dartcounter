@@ -32,6 +32,7 @@ export function CameraPreview({
     let mounted = true;
     let currentStream: MediaStream | null = null;
     let videoElement: HTMLVideoElement | null = null;
+    let cleanup: (() => void) | null = null;
 
     const startCamera = async () => {
       try {
@@ -53,7 +54,14 @@ export function CameraPreview({
 
         setStream(mediaStream);
 
-        if (videoRef.current) {
+        // Wait for video ref to be available
+        const setupVideo = () => {
+          if (!videoRef.current) {
+            // Retry after a short delay
+            setTimeout(setupVideo, 100);
+            return;
+          }
+
           videoElement = videoRef.current;
           videoRef.current.srcObject = mediaStream;
           
@@ -101,12 +109,20 @@ export function CameraPreview({
             videoElement.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
           }
           videoElement.addEventListener('error', handleError);
-        } else {
-          console.warn('[CameraPreview] Video ref not available');
-          setIsLoading(false);
-        }
+          
+          // Store cleanup function
+          cleanup = () => {
+            if (videoElement) {
+              videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+              videoElement.removeEventListener('error', handleError);
+            }
+          };
+        };
+
+        // Start setup (will retry if ref not ready)
+        setupVideo();
       } catch (err) {
-        console.error('Camera access error:', err);
+        console.error('[CameraPreview] Camera access error:', err);
         if (mounted) {
           const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
           setError(errorMessage);
@@ -119,6 +135,9 @@ export function CameraPreview({
 
     return () => {
       mounted = false;
+      if (cleanup) {
+        cleanup();
+      }
       if (currentStream) {
         stopCamera(currentStream);
       }
@@ -146,7 +165,13 @@ export function CameraPreview({
       const mediaStream = await requestCameraAccess();
       setStream(mediaStream);
 
-      if (videoRef.current) {
+      // Wait for video ref
+      const setupVideo = () => {
+        if (!videoRef.current) {
+          setTimeout(setupVideo, 100);
+          return;
+        }
+
         videoRef.current.srcObject = mediaStream;
         
         const handleLoadedMetadata = () => {
@@ -159,17 +184,23 @@ export function CameraPreview({
                 setIsLoading(false);
               })
               .catch((playErr) => {
-                console.error('Video play error:', playErr);
+                console.error('[CameraPreview] Video play error:', playErr);
                 setError('Failed to play video stream');
                 setIsLoading(false);
               });
           }
         };
         
-        videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
-      }
+        if (videoRef.current.readyState >= 2) {
+          handleLoadedMetadata();
+        } else {
+          videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+        }
+      };
+
+      setupVideo();
     } catch (err) {
-      console.error('Camera retry error:', err);
+      console.error('[CameraPreview] Camera retry error:', err);
       setError(err instanceof Error ? err.message : 'Failed to access camera');
       setIsLoading(false);
     }

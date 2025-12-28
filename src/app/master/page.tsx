@@ -490,12 +490,13 @@ export default function MasterPage() {
                   )}
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                <div className="flex flex-col items-center justify-center h-full min-h-[300px] p-6 text-center">
                   <Camera className="w-12 h-12 text-zinc-500 mb-4" />
-                  <p className="text-zinc-400 mb-4">Camera not calibrated</p>
-                  <Button onClick={() => setShowCalibration(true)}>
+                  <p className="text-zinc-400 mb-2">Camera not calibrated</p>
+                  <p className="text-xs text-zinc-600 mb-4">Calibrate the board position first</p>
+                  <Button onClick={() => setShowCalibration(true)} size="lg">
                     <Settings className="w-4 h-4 mr-2" />
-                    Calibrate
+                    Start Calibration
                   </Button>
                 </div>
               )}
