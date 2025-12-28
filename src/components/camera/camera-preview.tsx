@@ -54,14 +54,8 @@ export function CameraPreview({
 
         setStream(mediaStream);
 
-        // Wait for video ref to be available
-        const setupVideo = () => {
-          if (!videoRef.current) {
-            // Retry after a short delay
-            setTimeout(setupVideo, 100);
-            return;
-          }
-
+        // Video element is always rendered now, so ref should be available
+        if (videoRef.current) {
           videoElement = videoRef.current;
           videoRef.current.srcObject = mediaStream;
           
@@ -117,10 +111,14 @@ export function CameraPreview({
               videoElement.removeEventListener('error', handleError);
             }
           };
-        };
-
-        // Start setup (will retry if ref not ready)
-        setupVideo();
+        } else {
+          // Fallback: retry after a short delay (shouldn't happen now)
+          setTimeout(() => {
+            if (videoRef.current && mounted) {
+              videoRef.current.srcObject = mediaStream;
+            }
+          }, 100);
+        }
       } catch (err) {
         console.error('[CameraPreview] Camera access error:', err);
         if (mounted) {
@@ -165,13 +163,8 @@ export function CameraPreview({
       const mediaStream = await requestCameraAccess();
       setStream(mediaStream);
 
-      // Wait for video ref
-      const setupVideo = () => {
-        if (!videoRef.current) {
-          setTimeout(setupVideo, 100);
-          return;
-        }
-
+      // Video element is always rendered, so ref should be available
+      if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         
         const handleLoadedMetadata = () => {
@@ -196,9 +189,7 @@ export function CameraPreview({
         } else {
           videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
         }
-      };
-
-      setupVideo();
+      }
     } catch (err) {
       console.error('[CameraPreview] Camera retry error:', err);
       setError(err instanceof Error ? err.message : 'Failed to access camera');
@@ -232,27 +223,26 @@ export function CameraPreview({
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[300px] bg-zinc-900 rounded-xl p-6">
-        <Camera className="w-12 h-12 text-zinc-500 animate-pulse mb-4" />
-        <p className="text-zinc-400">Starting camera...</p>
-        <p className="text-xs text-zinc-500 mt-2">Please allow camera access</p>
-      </div>
-    );
-  }
-
   return (
     <div className="relative w-full h-full min-h-[300px] bg-zinc-900 rounded-xl overflow-hidden">
-      {/* Video feed */}
+      {/* Video feed - ALWAYS rendered */}
       <video
         ref={videoRef}
-        className="w-full h-full object-cover"
+        className={`w-full h-full object-cover ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         playsInline
         muted
         autoPlay
         style={{ transform: 'scaleX(-1)' }} // Mirror for better UX
       />
+
+      {/* Loading overlay - shows when isLoading */}
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 rounded-xl z-10">
+          <Camera className="w-12 h-12 text-zinc-500 animate-pulse mb-4" />
+          <p className="text-zinc-400">Starting camera...</p>
+          <p className="text-xs text-zinc-500 mt-2">Please allow camera access</p>
+        </div>
+      )}
 
       {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />
