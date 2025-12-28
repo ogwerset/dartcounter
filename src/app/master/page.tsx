@@ -12,7 +12,7 @@ import { TurnHistory } from '@/components/game/turn-history';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { DataConnection } from 'peerjs';
 
-const VERSION = 'v1.0.4';
+const VERSION = 'v1.0.5';
 
 export default function MasterPage() {
   const router = useRouter();
