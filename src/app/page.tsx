@@ -5,6 +5,8 @@ import { Camera, Monitor, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+const VERSION = 'v1.0.0';
+
 export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -57,10 +59,15 @@ export default function HomePage() {
           <Link href="/pair">
             <Button variant="ghost" className="w-full">
               <Link2 className="mr-2 h-4 w-4" />
-              Pair Devices (WebRTC)
+              Pair Devices
             </Button>
           </Link>
         </div>
+
+        {/* Version */}
+        <p className="text-center text-xs text-zinc-600 mt-6">
+          {VERSION}
+        </p>
       </div>
     </div>
   );

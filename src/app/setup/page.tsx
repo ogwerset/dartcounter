@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { GameConfig } from '@/types/game.types';
 
+const VERSION = 'v1.0.0';
+
 const COLORS = [
   { name: 'Blue', value: 'blue-500', hex: '#3b82f6' },
   { name: 'Red', value: 'red-500', hex: '#ef4444' },
@@ -150,6 +152,11 @@ export default function SetupPage() {
         <Button onClick={handleStart} className="w-full" size="lg">
           Start Game
         </Button>
+
+        {/* Version */}
+        <p className="text-center text-xs text-zinc-600 mt-6">
+          {VERSION}
+        </p>
       </div>
     </div>
   );

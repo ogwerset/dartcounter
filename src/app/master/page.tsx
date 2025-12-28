@@ -1,16 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useCallback } from 'react';
+import { ArrowLeft, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Numpad } from '@/components/game/numpad';
 import { CurrentTurn } from '@/components/game/current-turn';
 import { PlayerIndicator } from '@/components/game/player-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
-import { SyncIndicator } from '@/components/sync/sync-indicator';
 import { useGameStore } from '@/lib/stores/game-store';
-import { useSync } from '@/hooks/useSync';
+import type { DataConnection } from 'peerjs';
+
+const VERSION = 'v1.0.0';
 
 export default function MasterPage() {
   const router = useRouter();
@@ -19,6 +21,7 @@ export default function MasterPage() {
     currentPlayerIndex,
     currentTurn,
     turnHistory,
+    currentLeg,
     isGameActive,
     addThrow,
     completeTurn,
@@ -26,8 +29,43 @@ export default function MasterPage() {
     clearCurrentTurn,
   } = useGameStore();
   
-  // Initialize sync as master (broadcaster)
-  const { isConnected } = useSync({ mode: 'master' });
+  // Get PeerJS connection from window (set during pairing)
+  const getConnection = useCallback((): DataConnection | null => {
+    if (typeof window !== 'undefined') {
+      return (window as any).__dartConnection || null;
+    }
+    return null;
+  }, []);
+  
+  const isConnected = typeof window !== 'undefined' && !!(window as any).__dartConnection;
+  
+  // Send game state to Slave whenever it changes
+  const sendGameState = useCallback(() => {
+    const conn = getConnection();
+    if (conn && conn.open) {
+      conn.send({
+        type: 'game-sync',
+        data: {
+          players: players.map(p => ({
+            currentScore: p.currentScore,
+            legsWon: p.legsWon,
+          })),
+          currentPlayerIndex,
+          currentTurn: currentTurn.map(t => ({
+            segment: t.segment,
+            multiplier: t.multiplier,
+            points: t.points,
+          })),
+          currentLeg,
+        },
+      });
+    }
+  }, [getConnection, players, currentPlayerIndex, currentTurn, currentLeg]);
+  
+  // Send state on every change
+  useEffect(() => {
+    sendGameState();
+  }, [sendGameState]);
 
   if (!isGameActive) {
     return (
@@ -74,7 +112,19 @@ export default function MasterPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <SyncIndicator />
+        <div className="flex items-center gap-2 text-sm">
+          {isConnected ? (
+            <>
+              <Wifi className="h-4 w-4 text-green-400" />
+              <span className="text-green-400">Live</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-4 w-4 text-zinc-500" />
+              <span className="text-zinc-500">Offline</span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Current Player */}
@@ -126,6 +176,11 @@ export default function MasterPage() {
           <TurnHistory turns={turnHistory} players={players} />
         </CardContent>
       </Card>
+
+      {/* Version */}
+      <p className="text-center text-xs text-zinc-600 mt-6">
+        {VERSION}
+      </p>
     </div>
   );
 }

@@ -1,25 +1,25 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MegaScore } from '@/components/game/mega-score';
 import { CurrentTurn } from '@/components/game/current-turn';
 import { PlayerIndicator } from '@/components/game/player-indicator';
 import { LegIndicator } from '@/components/game/leg-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
-import { SyncIndicator } from '@/components/sync/sync-indicator';
 import { useGameStore } from '@/lib/stores/game-store';
 import { getCheckoutOptions } from '@/lib/game-logic/rules';
-import { useSync } from '@/hooks/useSync';
+
+const VERSION = 'v1.0.0';
 
 export default function SlavePage() {
   const router = useRouter();
   const { players, currentPlayerIndex, currentTurn, turnHistory, isGameActive, config } =
     useGameStore();
   
-  // Initialize sync as slave (receiver)
-  const { isConnected } = useSync({ mode: 'slave' });
+  // Get PeerJS connection status from window (set during pairing)
+  const isConnected = typeof window !== 'undefined' && !!(window as any).__dartConnection;
 
   if (!isGameActive) {
     return (
@@ -48,7 +48,19 @@ export default function SlavePage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <SyncIndicator />
+        <div className="flex items-center gap-2 text-sm">
+          {isConnected ? (
+            <>
+              <Wifi className="h-4 w-4 text-green-400" />
+              <span className="text-green-400">Live</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-4 w-4 text-zinc-500" />
+              <span className="text-zinc-500">Offline</span>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col items-center space-y-6">
@@ -128,6 +140,11 @@ export default function SlavePage() {
             <TurnHistory turns={turnHistory} players={players} maxTurns={3} />
           </div>
         )}
+
+        {/* Version */}
+        <p className="text-xs text-zinc-600 mt-6">
+          {VERSION}
+        </p>
       </div>
     </div>
   );
