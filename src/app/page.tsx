@@ -5,7 +5,7 @@ import { Camera, Monitor, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 
 export default function HomePage() {
   return (
