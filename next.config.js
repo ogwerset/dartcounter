@@ -13,8 +13,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  basePath: '/dartcounter',
-  assetPrefix: '/dartcounter/',
+  // basePath and assetPrefix removed - Vercel hosts at root
 };
 
 module.exports = nextConfig;
