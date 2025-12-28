@@ -33,7 +33,12 @@ export default function SlavePage() {
   // Setup data listener when component mounts
   useEffect(() => {
     const conn = getConnection();
-    if (!conn) return;
+    if (!conn) {
+      console.warn('[Slave] No connection available');
+      return;
+    }
+    
+    console.log('[Slave] Setting up data listener, connection open:', conn.open);
     
     // Setup listener for incoming data
     const handleData = (data: unknown) => {
@@ -42,6 +47,7 @@ export default function SlavePage() {
       if (data && typeof data === 'object' && 'type' in data) {
         const payload = data as { type: string; data: unknown };
         if (payload.type === 'game-sync') {
+          console.log('[Slave] Processing game-sync payload');
           const gameData = payload.data as {
             players: Array<{ currentScore: number; legsWon: number }>;
             currentPlayerIndex: number;
@@ -84,14 +90,34 @@ export default function SlavePage() {
             currentLeg: gameData.currentLeg,
             isGameActive: true,
           });
+          console.log('[Slave] State updated');
         }
       }
     };
     
+    // Remove any existing listeners first
+    conn.off('data');
+    // Add new listener
     conn.on('data', handleData);
+    
+    // Also listen for connection state changes
+    conn.on('open', () => {
+      console.log('[Slave] Connection opened');
+    });
+    
+    conn.on('close', () => {
+      console.log('[Slave] Connection closed');
+    });
+    
+    conn.on('error', (err) => {
+      console.error('[Slave] Connection error:', err);
+    });
     
     return () => {
       conn.off('data', handleData);
+      conn.off('open');
+      conn.off('close');
+      conn.off('error');
     };
   }, []);
 

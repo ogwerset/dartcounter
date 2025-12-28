@@ -42,36 +42,50 @@ export default function MasterPage() {
   // Send game state to Slave
   const sendGameState = useCallback(() => {
     const conn = getConnection();
-    if (conn && conn.open) {
-      const state = useGameStore.getState();
-      conn.send({
-        type: 'game-sync',
-        data: {
-          players: state.players.map(p => ({
-            currentScore: p.currentScore,
-            legsWon: p.legsWon,
-          })),
-          currentPlayerIndex: state.currentPlayerIndex,
-          currentTurn: state.currentTurn.map(t => ({
+    if (!conn) {
+      console.warn('[Master] No connection available');
+      return;
+    }
+    
+    if (!conn.open) {
+      console.warn('[Master] Connection not open');
+      return;
+    }
+    
+    const state = useGameStore.getState();
+    const payload = {
+      type: 'game-sync',
+      data: {
+        players: state.players.map(p => ({
+          currentScore: p.currentScore,
+          legsWon: p.legsWon,
+        })),
+        currentPlayerIndex: state.currentPlayerIndex,
+        currentTurn: state.currentTurn.map(t => ({
+          segment: t.segment,
+          multiplier: t.multiplier,
+          points: t.points,
+        })),
+        turnHistory: state.turnHistory.map(turn => ({
+          playerId: turn.playerId,
+          throws: turn.throws.map(t => ({
             segment: t.segment,
             multiplier: t.multiplier,
             points: t.points,
           })),
-          turnHistory: state.turnHistory.map(turn => ({
-            playerId: turn.playerId,
-            throws: turn.throws.map(t => ({
-              segment: t.segment,
-              multiplier: t.multiplier,
-              points: t.points,
-            })),
-            totalPoints: turn.totalPoints,
-            isBust: turn.isBust,
-            timestamp: turn.timestamp,
-          })),
-          currentLeg: state.currentLeg,
-        },
-      });
-      console.log('[Master] Sent game state');
+          totalPoints: turn.totalPoints,
+          isBust: turn.isBust,
+          timestamp: turn.timestamp,
+        })),
+        currentLeg: state.currentLeg,
+      },
+    };
+    
+    try {
+      conn.send(payload);
+      console.log('[Master] Sent game state:', payload.data);
+    } catch (err) {
+      console.error('[Master] Error sending:', err);
     }
   }, [getConnection]);
   

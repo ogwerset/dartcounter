@@ -58,9 +58,15 @@ export default function PairPage() {
           console.log('[Master] Received:', data);
         });
         
+        console.log('[Pair] Master connection opened, storing in window');
         // Store connection in window for later use
         (window as any).__dartConnection = conn;
         (window as any).__dartIsMaster = true;
+        
+        // Ensure connection is ready
+        conn.on('open', () => {
+          console.log('[Pair] Master connection confirmed open');
+        });
       },
       (err) => {
         if (err.message.includes('unavailable')) {
@@ -96,9 +102,15 @@ export default function PairPage() {
         connRef.current = conn;
         setStep('connected');
         
+        console.log('[Pair] Slave connection opened, storing in window');
         // Store connection in window for later use
         (window as any).__dartConnection = conn;
         (window as any).__dartIsMaster = false;
+        
+        // Ensure connection is ready
+        conn.on('open', () => {
+          console.log('[Pair] Slave connection confirmed open');
+        });
       },
       (data: unknown) => {
         console.log('[Slave] Received:', data);
