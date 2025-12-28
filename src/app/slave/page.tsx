@@ -287,15 +287,20 @@ export default function SlavePage() {
     <div 
       className="bg-zinc-950 flex flex-col overflow-hidden"
       style={{ 
-        minHeight: '100dvh',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        paddingTop: 'env(safe-area-inset-top)',
+        minHeight: '100svh', // Small viewport height for mobile (better than dvh)
+        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+        paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+        paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+        paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
       }}
     >
       {/* Connection status with reconnect button */}
       <div 
         className="absolute right-2 z-10 flex items-center gap-2"
-        style={{ top: 'max(0.5rem, env(safe-area-inset-top))' }}
+        style={{ 
+          top: 'max(0.5rem, env(safe-area-inset-top))',
+          right: 'max(0.5rem, env(safe-area-inset-right))',
+        }}
       >
         {connectionStatus === 'disconnected' && (
           <Button
@@ -392,13 +397,13 @@ export default function SlavePage() {
       )}
 
       {/* Main Display */}
-      <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         
         {/* Current Player Section - Takes most of the screen */}
-        <div className="flex-1 flex flex-col items-center justify-center w-full">
+        <div className="flex-1 flex flex-col items-center justify-center w-full max-w-full">
           {/* Player Name */}
           <div 
-            className="text-[clamp(2.5rem,10vw,8rem)] font-black tracking-wider mb-2"
+            className="text-[clamp(2rem,8vw,6rem)] font-black tracking-wider mb-1 sm:mb-2 px-2 text-center"
             style={{ 
               color: playerColor,
               textWrap: 'balance',
@@ -409,10 +414,11 @@ export default function SlavePage() {
           
           {/* MEGA Score - MAXIMUM SIZE with dynamic glow */}
           <div
-            className="text-center font-black tabular-nums leading-none text-[clamp(12rem,55vw,40rem)]"
+            className="text-center font-black tabular-nums leading-none text-[clamp(10rem,50vw,35rem)] px-2"
             style={{ 
               color: playerColor,
               ...getGlowStyle(playerColor),
+              lineHeight: '0.9',
             }}
           >
             {currentPlayer.currentScore}
@@ -420,14 +426,13 @@ export default function SlavePage() {
           
           {/* Current Turn Throws - with player color */}
           {currentTurn.length > 0 && (
-            <div className="flex items-center gap-3 sm:gap-6 mt-4 sm:mt-8">
+            <div className="flex items-center gap-2 sm:gap-4 mt-3 sm:mt-6 px-2 flex-wrap justify-center">
               {currentTurn.map((t, i) => (
                 <div 
                   key={i} 
-                  className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl px-4 py-2 sm:px-8 sm:py-4 text-[clamp(2.5rem,10vw,6rem)] font-black border-3"
+                  className="bg-zinc-800/80 backdrop-blur-sm rounded-xl sm:rounded-2xl px-3 py-1.5 sm:px-6 sm:py-3 text-[clamp(1.8rem,8vw,5rem)] font-black border-2 sm:border-3"
                   style={{ 
                     borderColor: playerColor,
-                    borderWidth: '3px',
                     color: playerColor,
                     boxShadow: `0 0 20px ${playerColor}40`,
                   }}
@@ -439,8 +444,7 @@ export default function SlavePage() {
               {Array.from({ length: 3 - currentTurn.length }).map((_, i) => (
                 <div 
                   key={`empty-${i}`}
-                  className="bg-zinc-900/50 border-3 border-zinc-700 rounded-2xl px-4 py-2 sm:px-8 sm:py-4 text-[clamp(2.5rem,10vw,6rem)] text-zinc-600"
-                  style={{ borderWidth: '3px' }}
+                  className="bg-zinc-900/50 border-2 sm:border-3 border-zinc-700 rounded-xl sm:rounded-2xl px-3 py-1.5 sm:px-6 sm:py-3 text-[clamp(1.8rem,8vw,5rem)] text-zinc-600"
                 >
                   —
                 </div>
@@ -451,7 +455,7 @@ export default function SlavePage() {
           {/* Turn Total - with player color and glow */}
           {currentTurn.length > 0 && (
             <div 
-              className="mt-4 sm:mt-6 text-[clamp(2rem,8vw,4rem)] font-black"
+              className="mt-2 sm:mt-4 text-[clamp(1.5rem,6vw,3rem)] font-black px-2"
               style={{ 
                 color: playerColor,
                 textShadow: `0 0 20px ${playerColor}60`,
@@ -463,11 +467,11 @@ export default function SlavePage() {
           
           {/* Checkout Options */}
           {checkoutOptions.length > 0 && currentPlayer.currentScore <= 170 && (
-            <div className="mt-4 sm:mt-8 text-center">
-              <div className="text-[clamp(1.2rem,5vw,2rem)] text-zinc-500 mb-2 font-bold tracking-wider">
+            <div className="mt-3 sm:mt-6 text-center px-2">
+              <div className="text-[clamp(1rem,4vw,1.8rem)] text-zinc-500 mb-1 sm:mb-2 font-bold tracking-wider">
                 CHECKOUT
               </div>
-              <div className="text-[clamp(1.5rem,6vw,3rem)] font-bold text-yellow-400">
+              <div className="text-[clamp(1.2rem,5vw,2.5rem)] font-bold text-yellow-400">
                 {checkoutOptions.slice(0, 3).join(' • ')}
               </div>
             </div>
@@ -476,27 +480,27 @@ export default function SlavePage() {
 
         {/* Bottom Bar - Other player + Legs - BIGGER & STICKY */}
         <div 
-          className="w-full max-w-5xl px-2 sm:px-4"
+          className="w-full max-w-5xl px-2 sm:px-4 mb-2"
           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
         >
-          <div className="flex items-center justify-between bg-zinc-900/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-3 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 bg-zinc-900/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-2 sm:p-4">
             {/* Other Player */}
-            <div className="flex items-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-4">
               <div 
-                className="w-4 h-4 sm:w-6 sm:h-6 rounded-full"
+                className="w-3 h-3 sm:w-5 sm:h-5 rounded-full flex-shrink-0"
                 style={{ 
                   backgroundColor: otherPlayerColor,
                   boxShadow: `0 0 10px ${otherPlayerColor}`,
                 }}
               />
               <span 
-                className="text-[clamp(1.5rem,5vw,2.5rem)] font-bold"
+                className="text-[clamp(1.2rem,4vw,2rem)] font-bold truncate max-w-[120px] sm:max-w-none"
                 style={{ color: otherPlayerColor }}
               >
                 {otherPlayer.name}
               </span>
               <span 
-                className="text-[clamp(2rem,8vw,4rem)] font-black"
+                className="text-[clamp(1.8rem,7vw,3.5rem)] font-black"
                 style={{ 
                   color: otherPlayerColor,
                   textShadow: `0 0 15px ${otherPlayerColor}60`,
@@ -507,12 +511,12 @@ export default function SlavePage() {
             </div>
             
             {/* Legs */}
-            <div className="flex items-center gap-2 sm:gap-4 text-[clamp(1.5rem,5vw,2.5rem)]">
+            <div className="flex items-center gap-2 text-[clamp(1.2rem,4vw,2rem)]">
               <span className="text-zinc-500 font-bold">Legs:</span>
               <span className="font-black text-white">
                 {players[0].legsWon} - {players[1].legsWon}
               </span>
-              <span className="text-zinc-600 text-[clamp(1rem,4vw,1.8rem)]">
+              <span className="text-zinc-600 text-[clamp(0.9rem,3vw,1.5rem)]">
                 (FT{config.legsToWin})
               </span>
             </div>
@@ -522,8 +526,11 @@ export default function SlavePage() {
 
       {/* Version - tiny */}
       <div 
-        className="absolute left-1 text-[0.6rem] text-zinc-700"
-        style={{ bottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
+        className="absolute text-[0.6rem] text-zinc-700"
+        style={{ 
+          bottom: 'max(0.25rem, env(safe-area-inset-bottom))',
+          left: 'max(0.25rem, env(safe-area-inset-left))',
+        }}
       >
         {VERSION}
       </div>

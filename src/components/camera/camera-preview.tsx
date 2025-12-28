@@ -177,32 +177,46 @@ export function CameraPreview({
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-zinc-900 rounded-xl p-6 text-center">
+      <div className="flex flex-col items-center justify-center h-full min-h-[300px] bg-zinc-900 rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-        <p className="text-red-400 mb-4">{error}</p>
-        <Button onClick={handleRetry} variant="outline">
+        <p className="text-red-400 mb-2 font-semibold">{error}</p>
+        <p className="text-xs text-zinc-500 mb-4 max-w-md">
+          Make sure you're using HTTPS or localhost, and that camera permissions are granted.
+        </p>
+        <Button onClick={handleRetry} variant="outline" size="lg">
           <CameraOff className="w-4 h-4 mr-2" />
-          Retry
+          Retry Camera
         </Button>
+        <details className="mt-4 text-left text-xs text-zinc-600">
+          <summary className="cursor-pointer">Debug Info</summary>
+          <pre className="mt-2 p-2 bg-zinc-800 rounded text-xs overflow-auto">
+            {JSON.stringify({
+              hasMediaDevices: !!navigator.mediaDevices,
+              hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
+              userAgent: navigator.userAgent.substring(0, 50),
+            }, null, 2)}
+          </pre>
+        </details>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-zinc-900 rounded-xl p-6">
+      <div className="flex flex-col items-center justify-center h-full min-h-[300px] bg-zinc-900 rounded-xl p-6">
         <Camera className="w-12 h-12 text-zinc-500 animate-pulse mb-4" />
         <p className="text-zinc-400">Starting camera...</p>
+        <p className="text-xs text-zinc-500 mt-2">Please allow camera access</p>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full min-h-[300px] bg-zinc-900 rounded-xl overflow-hidden">
       {/* Video feed */}
       <video
         ref={videoRef}
-        className="w-full h-full object-cover rounded-xl"
+        className="w-full h-full object-cover"
         playsInline
         muted
         autoPlay

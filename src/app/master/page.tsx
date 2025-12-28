@@ -456,7 +456,7 @@ export default function MasterPage() {
         <Card className="mb-4">
           <CardContent className="pt-6">
             {/* Camera mode */}
-            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900">
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 min-h-[300px] w-full">
               {isCalibrationComplete(calibration) ? (
                 <>
                   <CameraPreview
