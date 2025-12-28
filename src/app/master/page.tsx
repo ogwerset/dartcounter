@@ -12,7 +12,7 @@ import { TurnHistory } from '@/components/game/turn-history';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { DataConnection } from 'peerjs';
 
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 
 export default function MasterPage() {
   const router = useRouter();
@@ -133,7 +133,11 @@ export default function MasterPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <div className="flex items-center gap-2 text-sm">
+        <button
+          onClick={() => !isConnected && router.push('/pair')}
+          className="flex items-center gap-2 text-sm transition-opacity hover:opacity-80"
+          disabled={isConnected}
+        >
           {isConnected ? (
             <>
               <Wifi className="h-4 w-4 text-green-400" />
@@ -142,10 +146,10 @@ export default function MasterPage() {
           ) : (
             <>
               <WifiOff className="h-4 w-4 text-zinc-500" />
-              <span className="text-zinc-500">Offline</span>
+              <span className="text-zinc-500">Offline - Tap to pair</span>
             </>
           )}
-        </div>
+        </button>
       </div>
 
       {/* Current Player */}
