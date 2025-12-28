@@ -1,0 +1,224 @@
+# Darts Scorer PWA - Project Configuration
+
+## Project Overview
+PWA aplikacja do liczenia punktów w rzutkach (darts scorer).
+- **Master Phone**: Skanuje tarczę kamerą, rozpoznaje gdzie trafiła rzutka
+- **Slave Phone**: Wyświetla punktację live (MEGA display widoczny z 2-3m)
+- **Hosting**: GitHub Pages (static export)
+
+## Tech Stack
+
+### Frontend
+- Next.js 15 + React 19
+- TypeScript strict mode
+- TailwindCSS + shadcn/ui
+- Zustand (state management + localStorage persistence)
+
+### PWA
+- next-pwa plugin
+- manifest.json + service worker
+- Offline-first architecture
+
+### Computer Vision (Phase 3)
+- TensorFlow.js dla object detection
+- Canvas API dla overlays
+- getUserMedia dla camera access
+
+## Coding Conventions
+
+### TypeScript
+- Strict mode enabled
+- Explicit return types na funkcjach publicznych
+- Interface over type dla obiektów
+- Używaj `as const` dla literałów
+
+### React
+- Functional components only
+- Custom hooks dla logiki (useGameState, useCamera)
+- Komponenty w /components, logika w /lib
+- Nazewnictwo: PascalCase dla komponentów, camelCase dla funkcji
+
+### Styling
+- Tailwind utility classes
+- Dark mode jako default (bg-zinc-950, text-zinc-50)
+- Responsive: mobile-first (min-width breakpoints)
+- Używaj CSS clamp() dla responsive typography
+
+### File Structure
+```
+src/
+├── app/           # Next.js pages (App Router)
+├── components/    # React components
+│   ├── game/      # Game-specific (Numpad, ScoreDisplay)
+│   ├── camera/    # CV components (Phase 3)
+│   └── ui/        # shadcn/ui base components
+├── lib/           # Business logic
+│   ├── game-logic/
+│   ├── vision/    # CV processing (Phase 3)
+│   └── stores/    # Zustand stores
+├── hooks/         # Custom React hooks
+└── types/         # TypeScript interfaces
+```
+
+## Game Rules
+
+### Dartboard Segments
+- Numbers: 1-20 (arranged: 20-1-18-4-13-6-10-15-2-17-3-19-7-16-8-11-14-9-12-5)
+- Bullseye: 50 points (center)
+- Bull (outer bull): 25 points
+- Single: 1x multiplier
+- Double (outer ring): 2x multiplier
+- Triple (inner ring): 3x multiplier
+
+### Game Mode
+- 301 starting score
+- 2 players
+- Best of X legs (configurable)
+- Double-out required (must finish on double)
+- Bust: score goes below 0 or equals 1
+
+## User's Dartboard Colors
+- Single segments: BLUE
+- Double/Triple rings: WHITE + RED (alternating)
+- Darts: BLACK (good contrast for detection)
+
+## Computer Vision - Model Selection
+
+### Recommended Approach: Change Detection + Color Segmentation
+Nie potrzebujemy heavy ML modelu - wystarczy klasyczna CV:
+
+1. **Reference Frame** - zdjęcie pustej tarczy
+2. **Frame Differencing** - wykrycie nowego obiektu (rzutki)
+3. **Color Thresholding** - rozróżnienie blue/white/red stref
+4. **Geometric Mapping** - (x,y) → segment + ring
+
+### Alternatywne modele TensorFlow.js (jeśli potrzebne):
+
+#### Option A: COCO-SSD (Object Detection)
+```javascript
+// Wykrywa obiekty, ale może nie rozpoznać rzutki
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+const model = await cocoSsd.load();
+const predictions = await model.detect(imageElement);
+```
+- Pros: Pre-trained, łatwy w użyciu
+- Cons: Nie ma klasy "dart", trzeba fine-tunować
+
+#### Option B: Custom MobileNet (Recommended dla fine-tuning)
+```javascript
+// Transfer learning - dotrenuj na zdjęciach rzutek
+import * as mobilenet from '@tensorflow-models/mobilenet';
+import * as tf from '@tensorflow/tfjs';
+// Fine-tune na własnych danych
+```
+- Pros: Lekki, szybki, można dotrenować
+- Cons: Wymaga zebrania dataset zdjęć
+
+#### Option C: MediaPipe (Pose/Hand Detection) - NIE ZALECANE
+- Nie pasuje do tego use case (wykrywa ludzi, nie obiekty)
+
+### Zalecany Stack CV:
+```
+Phase 3 Implementation:
+├── lib/vision/
+│   ├── camera.ts           # getUserMedia wrapper
+│   ├── calibration.ts      # Detect board center, save reference
+│   ├── frame-diff.ts       # Compare current vs reference
+│   ├── color-segment.ts    # HSV thresholding (blue/white/red)
+│   ├── dart-detector.ts    # Find black dart in diff
+│   └── board-mapper.ts     # (x,y) → segment → points
+```
+
+### HSV Ranges dla Twojej Tarczy:
+```typescript
+const COLOR_RANGES = {
+  blue: { h: [200, 240], s: [50, 255], v: [50, 255] },   // Single
+  white: { h: [0, 360], s: [0, 30], v: [200, 255] },     // Double/Triple
+  red: { h: [0, 15], s: [100, 255], v: [100, 255] },     // Double/Triple alt
+  black: { h: [0, 360], s: [0, 255], v: [0, 50] },       // Dart
+};
+```
+
+## Implementation Phases
+
+### Phase 1: Basic UI + Manual Scoring ✓
+- Mode selection, setup page
+- Numpad input (manual)
+- MEGA score display (25vw font)
+- Game logic (301, double-out, legs)
+- localStorage persistence
+
+### Phase 2: BroadcastChannel Sync ✓ (CURRENT)
+- BroadcastChannel API (same-origin sync)
+- Master → Slave data transfer
+- Auto-sync on state change
+- Connection status indicator
+- Note: Web Bluetooth can only SCAN, not ADVERTISE from browser
+
+### Phase 3: Computer Vision
+- Camera access + calibration
+- Change detection algorithm
+- Dart localization
+- Segment mapping
+
+### Phase 4: PWA Polish
+- Service worker caching
+- Install prompt
+- Haptic feedback
+- Sound effects
+
+## GitHub Pages Deployment
+
+### next.config.js
+```javascript
+module.exports = {
+  output: 'export',
+  trailingSlash: true,
+  images: { unoptimized: true },
+  // basePath: '/repo-name',  // jeśli nie custom domain
+};
+```
+
+### GitHub Actions
+Deploy automatycznie przy push do main.
+
+## Display Specifications (Slave Phone)
+
+### Font Sizes (visible from 2-3 meters):
+- Player name: clamp(2rem, 8vw, 5rem)
+- Main score: clamp(5rem, 25vw, 15rem) 
+- Current turn: clamp(1.5rem, 6vw, 3rem)
+- Leg indicator: clamp(1.2rem, 5vw, 2.5rem)
+
+### Colors:
+- Background: #09090b (zinc-950)
+- Primary score: #00ff88 (neon green)
+- Secondary: #fafafa (zinc-50)
+- Accent: #f43f5e (rose-500)
+
+## Dependencies (package.json essentials)
+
+```json
+{
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "lucide-react": "latest",
+    "class-variance-authority": "latest",
+    "clsx": "latest",
+    "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/react": "latest",
+    "@types/node": "latest",
+    "tailwindcss": "^3.4.0",
+    "postcss": "latest",
+    "autoprefixer": "latest",
+    "next-pwa": "^5.6.0"
+  }
+}
+```
+
