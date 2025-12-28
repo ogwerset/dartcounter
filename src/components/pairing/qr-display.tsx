@@ -15,7 +15,7 @@ export function QRDisplay({
   size = 256,
   className,
   label,
-}: QRDisplayProps): JSX.Element {
+}: QRDisplayProps) {
   return (
     <div className={cn('flex flex-col items-center gap-4', className)}>
       {label && (

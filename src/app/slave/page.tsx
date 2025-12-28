@@ -13,7 +13,7 @@ import { useGameStore } from '@/lib/stores/game-store';
 import { getCheckoutOptions } from '@/lib/game-logic/rules';
 import { useSync } from '@/hooks/useSync';
 
-export default function SlavePage(): JSX.Element {
+export default function SlavePage() {
   const router = useRouter();
   const { players, currentPlayerIndex, currentTurn, turnHistory, isGameActive, config } =
     useGameStore();

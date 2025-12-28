@@ -161,7 +161,7 @@ export const useGameStore = create<GameStore>()(
               // Check for match win
               if (updatedPlayers[state.currentPlayerIndex].legsWon >= state.config.legsToWin) {
                 set({
-                  players: updatedPlayers,
+                  players: updatedPlayers as unknown as [Player, Player],
                   turnHistory: [...state.turnHistory, turn],
                   currentTurn: [],
                   matchWinner: updatedPlayers[state.currentPlayerIndex],
@@ -174,7 +174,7 @@ export const useGameStore = create<GameStore>()(
         }
 
         set({
-          players: updatedPlayers,
+          players: updatedPlayers as unknown as [Player, Player],
           turnHistory: [...state.turnHistory, turn],
           currentTurn: [],
         });
@@ -199,7 +199,7 @@ export const useGameStore = create<GameStore>()(
             ...p,
             currentScore: state.config.startingScore,
             throws: [],
-          })),
+          })) as unknown as [Player, Player],
           currentPlayerIndex: 0,
           currentTurn: [],
           currentLeg: state.currentLeg + 1,

@@ -13,7 +13,7 @@ interface SyncIndicatorProps {
 export function SyncIndicator({
   className,
   showLabel = true,
-}: SyncIndicatorProps): JSX.Element {
+}: SyncIndicatorProps) {
   const { isConnected, lastSyncTime, isMaster } = useSyncStore();
   const [pulse, setPulse] = useState(false);
   

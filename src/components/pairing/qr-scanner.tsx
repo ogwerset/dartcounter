@@ -16,7 +16,7 @@ export function QRScanner({
   onScan,
   className,
   label,
-}: QRScannerProps): JSX.Element {
+}: QRScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);

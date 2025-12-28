@@ -8,7 +8,7 @@ interface ConnectionStatusProps {
   className?: string;
 }
 
-export function ConnectionStatus({ className }: ConnectionStatusProps): JSX.Element {
+export function ConnectionStatus({ className }: ConnectionStatusProps) {
   const { isConnected, connectionMethod, lastSyncTime, isMaster } = useSyncStore();
   
   const timeSinceSync = lastSyncTime

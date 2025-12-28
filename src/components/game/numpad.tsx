@@ -23,7 +23,7 @@ export function Numpad({
   onNext,
   canConfirm,
   className,
-}: NumpadProps): JSX.Element {
+}: NumpadProps) {
   const [multiplier, setMultiplier] = useState<Multiplier>(1);
 
   const handleSegmentClick = (segment: Segment): void => {

@@ -10,7 +10,7 @@ interface CurrentTurnProps {
   className?: string;
 }
 
-export function CurrentTurn({ throws, className }: CurrentTurnProps): JSX.Element {
+export function CurrentTurn({ throws, className }: CurrentTurnProps) {
   const totalPoints = throws.reduce((sum, t) => sum + t.points, 0);
   const slots = [0, 1, 2] as const;
 

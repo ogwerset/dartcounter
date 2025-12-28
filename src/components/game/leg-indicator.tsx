@@ -13,7 +13,7 @@ export function LegIndicator({
   players,
   legsToWin,
   className,
-}: LegIndicatorProps): JSX.Element {
+}: LegIndicatorProps) {
   return (
     <div
       className={cn(

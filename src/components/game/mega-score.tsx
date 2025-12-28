@@ -7,7 +7,7 @@ interface MegaScoreProps {
   className?: string;
 }
 
-export function MegaScore({ score, className }: MegaScoreProps): JSX.Element {
+export function MegaScore({ score, className }: MegaScoreProps) {
   return (
     <div
       className={cn(

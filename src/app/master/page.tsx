@@ -12,7 +12,7 @@ import { SyncIndicator } from '@/components/sync/sync-indicator';
 import { useGameStore } from '@/lib/stores/game-store';
 import { useSync } from '@/hooks/useSync';
 
-export default function MasterPage(): JSX.Element {
+export default function MasterPage() {
   const router = useRouter();
   const {
     players,

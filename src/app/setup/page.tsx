@@ -16,14 +16,14 @@ const COLORS = [
   { name: 'Pink', value: 'pink-500', hex: '#ec4899' },
 ] as const;
 
-export default function SetupPage(): JSX.Element {
+export default function SetupPage() {
   const router = useRouter();
   const initializeGame = useGameStore((state) => state.initializeGame);
 
   const [player1Name, setPlayer1Name] = useState('Player 1');
-  const [player1Color, setPlayer1Color] = useState(COLORS[0].value);
+  const [player1Color, setPlayer1Color] = useState<string>(COLORS[0].value);
   const [player2Name, setPlayer2Name] = useState('Player 2');
-  const [player2Color, setPlayer2Color] = useState(COLORS[1].value);
+  const [player2Color, setPlayer2Color] = useState<string>(COLORS[1].value);
   const [legsToWin, setLegsToWin] = useState(3);
 
   const handleStart = (): void => {

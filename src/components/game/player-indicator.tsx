@@ -13,7 +13,7 @@ export function PlayerIndicator({
   player,
   isActive,
   className,
-}: PlayerIndicatorProps): JSX.Element {
+}: PlayerIndicatorProps) {
   return (
     <div
       className={cn(

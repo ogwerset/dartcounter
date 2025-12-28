@@ -39,7 +39,7 @@ import { useGameStore } from '@/lib/stores/game-store';
 import { createSyncPayload } from '@/lib/bluetooth/utils';
 import type { GameSyncPayload } from '@/types/bluetooth.types';
 
-export default function PairPage(): JSX.Element {
+export default function PairPage() {
   const router = useRouter();
   const {
     pairingStep,
@@ -103,7 +103,7 @@ export default function PairPage(): JSX.Element {
       setPc(peerConnection);
       
       // Setup data channel event for Master
-      peerConnection.ondatachannel = undefined; // Master creates channel
+      // Master creates channel, so we don't need to listen for incoming channels
       
       // Create offer
       const offer = await createOffer(peerConnection);

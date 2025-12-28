@@ -16,7 +16,7 @@ export function TurnHistory({
   players,
   maxTurns = 5,
   className,
-}: TurnHistoryProps): JSX.Element {
+}: TurnHistoryProps) {
   const recentTurns = turns.slice(-maxTurns).reverse();
   const playerMap = new Map(players.map((p) => [p.id, p]));
 
