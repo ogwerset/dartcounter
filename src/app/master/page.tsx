@@ -20,7 +20,7 @@ import { mapToSegment } from '@/lib/vision/board-mapper';
 import type { DataConnection } from 'peerjs';
 import type { CalibrationData, DetectionResult, Point } from '@/lib/vision/types';
 
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 
 type InputMode = 'numpad' | 'camera';
 

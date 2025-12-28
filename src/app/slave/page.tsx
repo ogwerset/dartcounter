@@ -10,7 +10,7 @@ import { formatThrow } from '@/lib/game-logic/scoring';
 import type { DataConnection } from 'peerjs';
 import type { Turn } from '@/types/game.types';
 
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 
 // Duration to show last turn summary (in ms)
 const TURN_DISPLAY_DURATION = 5000;
@@ -93,7 +93,9 @@ export default function SlavePage() {
       
       setLastTurn(newTurn);
       setLastTurnPlayer(player?.name || 'Player');
-      setLastTurnPlayerColor(COLOR_MAP[player?.color || 'green-500'] || '#00ff88');
+      // Get player color - ensure we use the actual player color, not default green
+      const playerColorKey = player?.color || 'green-500';
+      setLastTurnPlayerColor(COLOR_MAP[playerColorKey] || COLOR_MAP['green-500'] || '#00ff88');
       setShowLastTurn(true);
       setIsExiting(false);
       setTurnProgress(100);
@@ -329,14 +331,14 @@ export default function SlavePage() {
             isExiting ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}
           style={{
-            background: `radial-gradient(ellipse at center, rgba(9, 9, 11, 0.97) 0%, rgba(9, 9, 11, 0.99) 100%)`,
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
+            background: 'rgba(9, 9, 11, 0.90)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          {/* Progress bar at bottom - thicker */}
+          {/* Progress bar at bottom - more visible */}
           <div 
-            className="absolute left-0 right-0 h-3 bg-zinc-800"
+            className="absolute left-0 right-0 h-4 bg-zinc-800/50"
             style={{ bottom: 'env(safe-area-inset-bottom)' }}
           >
             <div 
@@ -344,18 +346,19 @@ export default function SlavePage() {
               style={{ 
                 width: `${turnProgress}%`,
                 backgroundColor: lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor,
-                boxShadow: `0 0 20px ${lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor}`,
+                boxShadow: `0 0 30px ${lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor}80`,
               }}
             />
           </div>
           
-          <div className="text-center space-y-4 sm:space-y-8 px-4">
+          <div className="text-center space-y-6 sm:space-y-10 px-4 max-w-4xl mx-auto">
             {/* Player name - animated */}
             <div 
-              className="text-[clamp(2.5rem,10vw,7rem)] font-black tracking-wider animate-in slide-in-from-top-4 fade-in duration-500"
+              className="text-[clamp(2rem,8vw,6rem)] font-black tracking-wider animate-in slide-in-from-top-4 fade-in duration-500"
               style={{ 
                 color: lastTurnPlayerColor,
                 textWrap: 'balance',
+                textShadow: `0 0 20px ${lastTurnPlayerColor}60`,
               }}
             >
               {lastTurnPlayer.toUpperCase()}
@@ -363,7 +366,7 @@ export default function SlavePage() {
             
             {/* Score/BUST - animated with glow */}
             <div 
-              className={`text-[clamp(10rem,50vw,35rem)] font-black leading-none animate-in zoom-in-95 fade-in duration-500 delay-150 ${lastTurn.isBust ? 'text-red-500' : ''}`}
+              className={`text-[clamp(8rem,45vw,30rem)] font-black leading-none animate-in zoom-in-95 fade-in duration-500 delay-150 ${lastTurn.isBust ? 'text-red-500' : ''}`}
               style={!lastTurn.isBust ? { 
                 color: lastTurnPlayerColor,
                 ...getGlowStyle(lastTurnPlayerColor),
@@ -374,19 +377,20 @@ export default function SlavePage() {
               {lastTurn.isBust ? 'BUST!' : lastTurn.totalPoints}
             </div>
             
-            {/* Throws - staggered animation */}
-            <div className="flex justify-center gap-4 sm:gap-8">
+            {/* Throws - staggered animation with better spacing */}
+            <div className="flex justify-center gap-3 sm:gap-6 flex-wrap">
               {lastTurn.throws.map((t, i) => (
                 <div 
                   key={i} 
-                  className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl px-4 py-2 sm:px-8 sm:py-4 border-2 animate-in slide-in-from-bottom-4 fade-in duration-500"
+                  className="bg-zinc-800/90 backdrop-blur-sm rounded-xl sm:rounded-2xl px-3 py-1.5 sm:px-6 sm:py-3 border-2 animate-in slide-in-from-bottom-4 fade-in duration-500"
                   style={{ 
                     animationDelay: `${200 + i * 100}ms`,
                     borderColor: lastTurnPlayerColor,
                     color: lastTurnPlayerColor,
+                    boxShadow: `0 0 15px ${lastTurnPlayerColor}40`,
                   }}
                 >
-                  <span className="text-[clamp(2.5rem,10vw,6rem)] font-black">
+                  <span className="text-[clamp(2rem,8vw,5rem)] font-black">
                     {formatThrow(t)}
                   </span>
                 </div>
