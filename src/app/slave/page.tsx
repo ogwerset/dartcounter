@@ -90,15 +90,59 @@ export default function SlavePage() {
             currentLeg: gameData.currentLeg,
             isGameActive: true,
           });
-          console.log('[Slave] State updated');
+          console.log('[Slave] State updated, game active:', true);
         }
       }
+    };
+    
+    // Also handle game-start message
+    const handleGameStart = (data: unknown) => {
+      if (data && typeof data === 'object' && 'type' in data) {
+        const payload = data as { type: string; data: unknown };
+        if (payload.type === 'game-start') {
+          console.log('[Slave] Game start received, updating state');
+          const gameData = payload.data as {
+            players: Array<{ currentScore: number; legsWon: number; name: string; color: string }>;
+            currentPlayerIndex: number;
+            currentLeg: number;
+            config: { startingScore: number; legsToWin: number; doubleOut: boolean };
+          };
+          
+          const currentState = useGameStore.getState();
+          useGameStore.setState({
+            players: gameData.players.map((p, idx) => ({
+              ...currentState.players[idx],
+              currentScore: p.currentScore,
+              legsWon: p.legsWon,
+              name: p.name,
+              color: p.color,
+            })) as [typeof currentState.players[0], typeof currentState.players[1]],
+            currentPlayerIndex: gameData.currentPlayerIndex as 0 | 1,
+            currentLeg: gameData.currentLeg,
+            config: {
+              startingScore: 301,
+              legsToWin: gameData.config.legsToWin,
+              doubleOut: gameData.config.doubleOut,
+            },
+            isGameActive: true,
+            currentTurn: [],
+            turnHistory: [],
+          });
+          console.log('[Slave] Game started');
+        }
+      }
+    };
+    
+    // Listen for both game-sync and game-start
+    const combinedHandler = (data: unknown) => {
+      handleData(data);
+      handleGameStart(data);
     };
     
     // Remove any existing listeners first
     conn.off('data');
     // Add new listener
-    conn.on('data', handleData);
+    conn.on('data', combinedHandler);
     
     // Also listen for connection state changes
     conn.on('open', () => {

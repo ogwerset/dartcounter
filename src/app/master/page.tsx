@@ -47,8 +47,15 @@ export default function MasterPage() {
       return;
     }
     
+    // Wait for connection to be open
     if (!conn.open) {
-      console.warn('[Master] Connection not open');
+      console.log('[Master] Connection not open yet, waiting...');
+      const handler = () => {
+        console.log('[Master] Connection opened, sending state now');
+        sendGameState();
+        conn.off('open', handler);
+      };
+      conn.on('open', handler);
       return;
     }
     
@@ -89,10 +96,93 @@ export default function MasterPage() {
     }
   }, [getConnection]);
   
+  // Send game-start message when game becomes active
+  useEffect(() => {
+    if (!isGameActive) return;
+    
+    const conn = getConnection();
+    if (!conn) return;
+    
+    const sendGameStart = () => {
+      if (conn.open) {
+        const state = useGameStore.getState();
+        conn.send({
+          type: 'game-start',
+          data: {
+            players: state.players.map(p => ({
+              currentScore: p.currentScore,
+              legsWon: p.legsWon,
+              name: p.name,
+              color: p.color,
+            })),
+            currentPlayerIndex: state.currentPlayerIndex,
+            currentLeg: state.currentLeg,
+            config: state.config,
+          },
+        });
+        console.log('[Master] Sent game-start message');
+      } else {
+        const handler = () => {
+          const state = useGameStore.getState();
+          conn.send({
+            type: 'game-start',
+            data: {
+              players: state.players.map(p => ({
+                currentScore: p.currentScore,
+                legsWon: p.legsWon,
+                name: p.name,
+                color: p.color,
+              })),
+              currentPlayerIndex: state.currentPlayerIndex,
+              currentLeg: state.currentLeg,
+              config: state.config,
+            },
+          });
+          console.log('[Master] Sent game-start message (after connection opened)');
+          conn.off('open', handler);
+        };
+        conn.on('open', handler);
+      }
+    };
+    
+    sendGameStart();
+  }, [isGameActive, getConnection]);
+  
+  // Setup connection listener when component mounts
+  useEffect(() => {
+    const conn = getConnection();
+    if (!conn) return;
+    
+    // Wait for connection to be open, then send initial state
+    const sendWhenReady = () => {
+      if (conn.open) {
+        const state = useGameStore.getState();
+        if (state.isGameActive) {
+          sendGameState();
+        }
+      } else {
+        // Wait for connection to open
+        const handler = () => {
+          console.log('[Master] Connection opened, sending initial state');
+          const state = useGameStore.getState();
+          if (state.isGameActive) {
+            sendGameState();
+          }
+          conn.off('open', handler);
+        };
+        conn.on('open', handler);
+      }
+    };
+    
+    sendWhenReady();
+  }, [getConnection, sendGameState]);
+  
   // Send state whenever relevant state changes
   useEffect(() => {
-    sendGameState();
-  }, [players, currentPlayerIndex, currentTurn, turnHistory, currentLeg, sendGameState]);
+    if (isGameActive) {
+      sendGameState();
+    }
+  }, [players, currentPlayerIndex, currentTurn, turnHistory, currentLeg, isGameActive, sendGameState]);
 
   if (!isGameActive) {
     return (
