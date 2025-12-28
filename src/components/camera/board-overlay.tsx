@@ -4,7 +4,7 @@ import { SEGMENT_ORDER, RING_BOUNDARIES } from '@/lib/vision/types';
 import type { CalibrationData, Point } from '@/lib/vision/types';
 
 interface BoardOverlayProps {
-  calibration: CalibrationData;
+  calibration: CalibrationData | null;
   videoWidth: number;
   videoHeight: number;
   detectedPoint?: Point | null;
@@ -24,6 +24,10 @@ export function BoardOverlay({
   detectedPoint,
   highlightedSegment,
 }: BoardOverlayProps) {
+  if (!calibration) {
+    return null;
+  }
+  
   const { center, radius } = calibration;
   
   // Generate segment paths

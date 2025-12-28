@@ -172,7 +172,6 @@ export function CalibrationScreen({ onComplete, onCancel }: CalibrationScreenPro
       >
         <CameraPreview
           onVideoReady={handleVideoReady}
-          calibration={calibration}
           showOverlay={true}
         />
       </div>

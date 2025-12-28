@@ -10,7 +10,7 @@ import { formatThrow } from '@/lib/game-logic/scoring';
 import type { DataConnection } from 'peerjs';
 import type { Turn } from '@/types/game.types';
 
-const VERSION = 'v1.3.0';
+const VERSION = 'v1.4.0';
 
 // Duration to show last turn summary (in ms)
 const TURN_DISPLAY_DURATION = 5000;
@@ -364,9 +364,9 @@ export default function SlavePage() {
               {lastTurnPlayer.toUpperCase()}
             </div>
             
-            {/* Score/BUST - animated with glow */}
+            {/* Score/BUST - animated with glow - better scaling */}
             <div 
-              className={`text-[clamp(8rem,45vw,30rem)] font-black leading-none animate-in zoom-in-95 fade-in duration-500 delay-150 ${lastTurn.isBust ? 'text-red-500' : ''}`}
+              className={`text-[clamp(4rem,min(40vw,40vh),25rem)] font-black leading-none animate-in zoom-in-95 fade-in duration-500 delay-150 ${lastTurn.isBust ? 'text-red-500' : ''}`}
               style={!lastTurn.isBust ? { 
                 color: lastTurnPlayerColor,
                 ...getGlowStyle(lastTurnPlayerColor),
@@ -377,7 +377,7 @@ export default function SlavePage() {
               {lastTurn.isBust ? 'BUST!' : lastTurn.totalPoints}
             </div>
             
-            {/* Throws - staggered animation with better spacing */}
+            {/* Throws - staggered animation with better spacing - smaller on mobile */}
             <div className="flex justify-center gap-3 sm:gap-6 flex-wrap">
               {lastTurn.throws.map((t, i) => (
                 <div 
@@ -390,7 +390,7 @@ export default function SlavePage() {
                     boxShadow: `0 0 15px ${lastTurnPlayerColor}40`,
                   }}
                 >
-                  <span className="text-[clamp(2rem,8vw,5rem)] font-black">
+                  <span className="text-[clamp(1.5rem,6vw,4rem)] font-black">
                     {formatThrow(t)}
                   </span>
                 </div>

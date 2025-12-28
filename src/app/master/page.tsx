@@ -10,15 +10,13 @@ import { CurrentTurn } from '@/components/game/current-turn';
 import { PlayerIndicator } from '@/components/game/player-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
 import { CameraPreview } from '@/components/camera/camera-preview';
-import { CalibrationScreen } from '@/components/camera/calibration-screen';
 import { BoardOverlay } from '@/components/camera/board-overlay';
 import { useGameStore } from '@/lib/stores/game-store';
-import { loadCalibration, isCalibrationComplete } from '@/lib/vision/calibration';
 import { DartTracker } from '@/lib/vision/dart-tracker';
 import type { DataConnection } from 'peerjs';
-import type { CalibrationData, Point } from '@/lib/vision/types';
+import type { Point } from '@/lib/vision/types';
 
-const VERSION = 'v1.3.0';
+const VERSION = 'v1.4.0';
 
 type InputMode = 'numpad' | 'camera';
 
@@ -39,24 +37,16 @@ export default function MasterPage() {
   
   // Input mode state
   const [inputMode, setInputMode] = useState<InputMode>('numpad');
-  const [showCalibration, setShowCalibration] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationData | null>(null);
   
   // Camera/detection state
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const trackerRef = useRef<DartTracker | null>(null);
-  const [trackerState, setTrackerState] = useState<'idle' | 'waiting-dart-1' | 'waiting-dart-2' | 'waiting-dart-3' | 'turn-complete' | 'waiting-removal'>('idle');
+  const [trackerState, setTrackerState] = useState<'idle' | 'no-board' | 'waiting-dart-1' | 'waiting-dart-2' | 'waiting-dart-3' | 'turn-complete' | 'waiting-removal'>('idle');
   const [detectedDartCount, setDetectedDartCount] = useState(0);
   const [lastDetectedDart, setLastDetectedDart] = useState<{ segment: number; multiplier: number; points: number } | null>(null);
-  
-  // Load calibration on mount
-  useEffect(() => {
-    const saved = loadCalibration();
-    if (saved) {
-      setCalibration(saved);
-    }
-  }, []);
+  const [boardDetected, setBoardDetected] = useState(false);
+  const [motionStatus, setMotionStatus] = useState<string>('');
   
   // Get PeerJS connection from window (set during pairing)
   const getConnection = useCallback((): DataConnection | null => {
@@ -218,17 +208,14 @@ export default function MasterPage() {
     videoRef.current = video;
     canvasRef.current = canvas;
     
-    // Initialize tracker if calibration is ready
-    if (calibration && isCalibrationComplete(calibration)) {
-      initializeTracker(video, canvas, calibration);
-    }
-  }, [calibration]);
+    // Initialize tracker
+    initializeTracker(video, canvas);
+  }, []);
   
   // Initialize dart tracker
   const initializeTracker = useCallback((
     video: HTMLVideoElement,
-    canvas: HTMLCanvasElement,
-    cal: CalibrationData
+    canvas: HTMLCanvasElement
   ) => {
     if (trackerRef.current) {
       trackerRef.current.stop();
@@ -261,9 +248,15 @@ export default function MasterPage() {
         setTrackerState(state);
         console.log('[Master] Tracker state:', state);
       },
+      onBoardDetected: (detected) => {
+        setBoardDetected(detected);
+      },
+      onMotionStatus: (status) => {
+        setMotionStatus(status);
+      },
     });
     
-    tracker.initialize(video, canvas, cal);
+    tracker.initialize(video, canvas);
     trackerRef.current = tracker;
     
     // Start continuous detection
@@ -273,10 +266,10 @@ export default function MasterPage() {
     tracker.startTurn();
   }, [addThrow, sendGameState]);
   
-  // Re-initialize tracker when calibration changes
+  // Initialize tracker when camera is ready
   useEffect(() => {
-    if (videoRef.current && canvasRef.current && calibration && isCalibrationComplete(calibration)) {
-      initializeTracker(videoRef.current, canvasRef.current, calibration);
+    if (videoRef.current && canvasRef.current) {
+      initializeTracker(videoRef.current, canvasRef.current);
     }
     
     return () => {
@@ -284,7 +277,7 @@ export default function MasterPage() {
         trackerRef.current.stop();
       }
     };
-  }, [calibration, initializeTracker]);
+  }, [initializeTracker]);
   
   // Reset tracker when turn completes or player changes
   useEffect(() => {
@@ -294,12 +287,6 @@ export default function MasterPage() {
       setLastDetectedDart(null);
     }
   }, [currentTurn.length, trackerState]);
-  
-  // Handle calibration complete
-  const handleCalibrationComplete = useCallback((cal: CalibrationData) => {
-    setCalibration(cal);
-    setShowCalibration(false);
-  }, []);
 
   if (!isGameActive) {
     return (
@@ -314,15 +301,6 @@ export default function MasterPage() {
     );
   }
   
-  // Show calibration screen
-  if (showCalibration) {
-    return (
-      <CalibrationScreen
-        onComplete={handleCalibrationComplete}
-        onCancel={() => setShowCalibration(false)}
-      />
-    );
-  }
 
   const currentPlayer = players[currentPlayerIndex];
   const canConfirm = currentTurn.length > 0;
@@ -447,91 +425,91 @@ export default function MasterPage() {
           <CardContent className="pt-6">
             {/* Camera mode */}
             <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900 min-h-[300px] w-full">
-              {isCalibrationComplete(calibration) ? (
-                <>
-                  <CameraPreview
-                    onVideoReady={handleVideoReady}
-                    calibration={calibration}
-                    showOverlay={true}
-                  >
-                    {/* Board overlay */}
-                    {calibration && videoRef.current && (
-                      <BoardOverlay
-                        calibration={calibration}
-                        videoWidth={videoRef.current.videoWidth || 1920}
-                        videoHeight={videoRef.current.videoHeight || 1080}
-                        highlightedSegment={lastDetectedDart ? {
-                          segment: lastDetectedDart.segment,
-                          multiplier: lastDetectedDart.multiplier,
-                        } : null}
-                      />
-                    )}
-                  </CameraPreview>
-                  
-                  {/* Tracker status overlay */}
-                  {trackerState !== 'idle' && (
-                    <div className="absolute top-4 left-4 right-4 bg-zinc-900/90 backdrop-blur-sm rounded-lg p-3 z-30">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-semibold text-zinc-300">
-                            {trackerState === 'waiting-dart-1' && 'Waiting for Dart 1/3...'}
-                            {trackerState === 'waiting-dart-2' && 'Waiting for Dart 2/3...'}
-                            {trackerState === 'waiting-dart-3' && 'Waiting for Dart 3/3...'}
-                            {trackerState === 'turn-complete' && 'Turn Complete!'}
-                            {trackerState === 'waiting-removal' && 'Remove darts to continue...'}
-                          </div>
-                          {lastDetectedDart && (
-                            <div className="text-xs text-zinc-400 mt-1">
-                              Last: {lastDetectedDart.segment > 0 
-                                ? `${lastDetectedDart.multiplier === 3 ? 'T' : lastDetectedDart.multiplier === 2 ? 'D' : 'S'}${lastDetectedDart.segment}` 
-                                : 'Miss'} ({lastDetectedDart.points} pts)
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-lg font-bold text-green-400">
-                          {detectedDartCount}/3
-                        </div>
+              <CameraPreview
+                onVideoReady={handleVideoReady}
+                showOverlay={true}
+              >
+                {/* Board overlay - show detected board */}
+                {videoRef.current && trackerRef.current && (
+                  <BoardOverlay
+                    calibration={trackerRef.current.getCurrentBoard() ? {
+                      center: trackerRef.current.getCurrentBoard()!.center,
+                      radius: trackerRef.current.getCurrentBoard()!.radius,
+                      referenceFrame: null,
+                      timestamp: Date.now(),
+                    } : null}
+                    videoWidth={videoRef.current.videoWidth || 1920}
+                    videoHeight={videoRef.current.videoHeight || 1080}
+                    highlightedSegment={lastDetectedDart ? {
+                      segment: lastDetectedDart.segment,
+                      multiplier: lastDetectedDart.multiplier,
+                    } : null}
+                  />
+                )}
+              </CameraPreview>
+              
+              {/* Status overlay */}
+              <div className="absolute top-4 left-4 right-4 bg-zinc-900/90 backdrop-blur-sm rounded-lg p-3 z-30">
+                {/* Board status */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-2 h-2 rounded-full ${boardDetected ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="text-xs font-medium text-zinc-300">
+                    {boardDetected ? 'Board detected' : 'Position camera at board'}
+                  </span>
+                </div>
+                
+                {/* Tracker status */}
+                {boardDetected && trackerState !== 'idle' && (
+                  <>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-sm font-semibold text-zinc-300">
+                        {trackerState === 'no-board' && 'Waiting for board...'}
+                        {trackerState === 'waiting-dart-1' && 'Waiting for Dart 1/3...'}
+                        {trackerState === 'waiting-dart-2' && 'Waiting for Dart 2/3...'}
+                        {trackerState === 'waiting-dart-3' && 'Waiting for Dart 3/3...'}
+                        {trackerState === 'turn-complete' && 'Turn Complete!'}
+                        {trackerState === 'waiting-removal' && 'Remove darts to continue...'}
+                      </div>
+                      <div className="text-lg font-bold text-green-400">
+                        {detectedDartCount}/3
                       </div>
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full min-h-[300px] p-6 text-center">
-                  <Camera className="w-12 h-12 text-zinc-500 mb-4" />
-                  <p className="text-zinc-400 mb-2">Camera not calibrated</p>
-                  <p className="text-xs text-zinc-600 mb-4">Calibrate the board position first</p>
-                  <Button onClick={() => setShowCalibration(true)} size="lg">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Start Calibration
-                  </Button>
-                </div>
-              )}
+                    
+                    {/* Motion status */}
+                    {motionStatus && (
+                      <div className="text-xs text-zinc-400 mt-1">
+                        {motionStatus}
+                      </div>
+                    )}
+                    
+                    {/* Last detected dart */}
+                    {lastDetectedDart && (
+                      <div className="text-xs text-zinc-400 mt-1">
+                        Last: {lastDetectedDart.segment > 0 
+                          ? `${lastDetectedDart.multiplier === 3 ? 'T' : lastDetectedDart.multiplier === 2 ? 'D' : 'S'}${lastDetectedDart.segment}` 
+                          : 'Miss'} ({lastDetectedDart.points} pts)
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
             
             {/* Camera controls */}
-            {isCalibrationComplete(calibration) && (
-              <div className="flex gap-4 mt-4 justify-center">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (trackerRef.current) {
-                      trackerRef.current.reset();
-                      trackerRef.current.startTurn();
-                    }
-                  }}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Reset Turn
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCalibration(true)}
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Recalibrate
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-4 mt-4 justify-center">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (trackerRef.current) {
+                    trackerRef.current.reset();
+                    trackerRef.current.startTurn();
+                  }
+                }}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Reset Turn
+              </Button>
+            </div>
             
             {/* Manual controls for camera mode (fallback) */}
             <div className="flex gap-4 mt-4 justify-center">

@@ -4,21 +4,16 @@ import { useRef, useEffect, useState } from 'react';
 import { Camera, CameraOff, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { requestCameraAccess, stopCamera } from '@/lib/vision/camera';
-import type { CalibrationData, Point } from '@/lib/vision/types';
 
 interface CameraPreviewProps {
   onVideoReady?: (video: HTMLVideoElement, canvas: HTMLCanvasElement) => void;
-  calibration?: CalibrationData | null;
   showOverlay?: boolean;
-  detectedPoint?: Point | null;
   children?: React.ReactNode;
 }
 
 export function CameraPreview({
   onVideoReady,
-  calibration,
   showOverlay = true,
-  detectedPoint,
   children,
 }: CameraPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -246,66 +241,6 @@ export function CameraPreview({
       {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Calibration overlay */}
-      {showOverlay && calibration && (
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox={`0 0 ${videoRef.current?.videoWidth || 1920} ${videoRef.current?.videoHeight || 1080}`}
-          preserveAspectRatio="xMidYMid slice"
-        >
-          {/* Board circle */}
-          <circle
-            cx={calibration.center.x}
-            cy={calibration.center.y}
-            r={calibration.radius}
-            fill="none"
-            stroke="#00ff88"
-            strokeWidth="3"
-            strokeDasharray="10,5"
-            opacity="0.7"
-          />
-          
-          {/* Center crosshair */}
-          <line
-            x1={calibration.center.x - 20}
-            y1={calibration.center.y}
-            x2={calibration.center.x + 20}
-            y2={calibration.center.y}
-            stroke="#00ff88"
-            strokeWidth="2"
-          />
-          <line
-            x1={calibration.center.x}
-            y1={calibration.center.y - 20}
-            x2={calibration.center.x}
-            y2={calibration.center.y + 20}
-            stroke="#00ff88"
-            strokeWidth="2"
-          />
-
-          {/* Detected dart position */}
-          {detectedPoint && (
-            <>
-              <circle
-                cx={detectedPoint.x}
-                cy={detectedPoint.y}
-                r="15"
-                fill="#ef4444"
-                opacity="0.8"
-              />
-              <circle
-                cx={detectedPoint.x}
-                cy={detectedPoint.y}
-                r="25"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="3"
-                opacity="0.6"
-              />
-            </>
-          )}
-        </svg>
-      )}
 
       {/* Children (e.g., calibration controls) */}
       {children}
