@@ -13,7 +13,7 @@ import { useGameStore } from '@/lib/stores/game-store';
 import { getCheckoutOptions } from '@/lib/game-logic/rules';
 import type { DataConnection } from 'peerjs';
 
-const VERSION = 'v1.0.1';
+const VERSION = 'v1.0.2';
 
 export default function SlavePage() {
   const router = useRouter();

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { GameConfig } from '@/types/game.types';
 
-const VERSION = 'v1.0.1';
+const VERSION = 'v1.0.2';
 
 const COLORS = [
   { name: 'Blue', value: 'blue-500', hex: '#3b82f6' },
