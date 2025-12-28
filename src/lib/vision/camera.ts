@@ -7,9 +7,9 @@ import type { CameraState, Point } from './types';
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   video: {
     facingMode: { ideal: 'environment' }, // Prefer rear camera
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30 },
+    width: { ideal: 1920, min: 640 },
+    height: { ideal: 1080, min: 480 },
+    frameRate: { ideal: 30, min: 15 },
   },
   audio: false,
 };

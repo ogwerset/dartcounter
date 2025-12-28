@@ -30,12 +30,21 @@ export function CameraPreview({
   // Start camera on mount
   useEffect(() => {
     let mounted = true;
+    let currentStream: MediaStream | null = null;
+    let videoElement: HTMLVideoElement | null = null;
 
     const startCamera = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        
+        // Check if getUserMedia is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Camera API not available. Please use HTTPS or localhost.');
+        }
+        
         const mediaStream = await requestCameraAccess();
+        currentStream = mediaStream;
         
         if (!mounted) {
           stopCamera(mediaStream);
@@ -45,19 +54,62 @@ export function CameraPreview({
         setStream(mediaStream);
 
         if (videoRef.current) {
+          videoElement = videoRef.current;
           videoRef.current.srcObject = mediaStream;
-          await videoRef.current.play();
           
-          if (onVideoReady && canvasRef.current) {
-            onVideoReady(videoRef.current, canvasRef.current);
+          // Wait for video to be ready
+          const handleLoadedMetadata = () => {
+            if (!mounted || !videoElement) return;
+            
+            console.log('[CameraPreview] Video metadata loaded', {
+              width: videoElement.videoWidth,
+              height: videoElement.videoHeight,
+              readyState: videoElement.readyState,
+            });
+            
+            videoElement.play()
+              .then(() => {
+                console.log('[CameraPreview] Video playing');
+                if (mounted && onVideoReady && canvasRef.current && videoElement) {
+                  onVideoReady(videoElement, canvasRef.current);
+                }
+                if (mounted) {
+                  setIsLoading(false);
+                }
+              })
+              .catch((playErr) => {
+                console.error('[CameraPreview] Video play error:', playErr);
+                if (mounted) {
+                  setError(`Failed to play video: ${playErr.message}`);
+                  setIsLoading(false);
+                }
+              });
+          };
+          
+          const handleError = (e: Event) => {
+            console.error('[CameraPreview] Video error:', e);
+            if (mounted) {
+              setError('Video stream error occurred');
+              setIsLoading(false);
+            }
+          };
+          
+          // If already loaded, call handler immediately
+          if (videoElement.readyState >= 2) {
+            handleLoadedMetadata();
+          } else {
+            videoElement.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
           }
+          videoElement.addEventListener('error', handleError);
+        } else {
+          console.warn('[CameraPreview] Video ref not available');
+          setIsLoading(false);
         }
       } catch (err) {
+        console.error('Camera access error:', err);
         if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to access camera');
-        }
-      } finally {
-        if (mounted) {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
+          setError(errorMessage);
           setIsLoading(false);
         }
       }
@@ -67,8 +119,11 @@ export function CameraPreview({
 
     return () => {
       mounted = false;
-      if (stream) {
-        stopCamera(stream);
+      if (currentStream) {
+        stopCamera(currentStream);
+      }
+      if (videoElement) {
+        videoElement.srcObject = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,20 +139,38 @@ export function CameraPreview({
     setIsLoading(true);
 
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera API not available. Please use HTTPS or localhost.');
+      }
+      
       const mediaStream = await requestCameraAccess();
       setStream(mediaStream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play();
         
-        if (onVideoReady && canvasRef.current) {
-          onVideoReady(videoRef.current, canvasRef.current);
-        }
+        const handleLoadedMetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play()
+              .then(() => {
+                if (onVideoReady && canvasRef.current && videoRef.current) {
+                  onVideoReady(videoRef.current, canvasRef.current);
+                }
+                setIsLoading(false);
+              })
+              .catch((playErr) => {
+                console.error('Video play error:', playErr);
+                setError('Failed to play video stream');
+                setIsLoading(false);
+              });
+          }
+        };
+        
+        videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
       }
     } catch (err) {
+      console.error('Camera retry error:', err);
       setError(err instanceof Error ? err.message : 'Failed to access camera');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -133,6 +206,7 @@ export function CameraPreview({
         playsInline
         muted
         autoPlay
+        style={{ transform: 'scaleX(-1)' }} // Mirror for better UX
       />
 
       {/* Hidden canvas for frame capture */}
