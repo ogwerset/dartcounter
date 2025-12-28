@@ -10,7 +10,7 @@ import { useGameStore } from '@/lib/stores/game-store';
 import type { DataConnection } from 'peerjs';
 import type Peer from 'peerjs';
 
-const VERSION = 'v1.0.2';
+const VERSION = 'v1.0.3';
 
 type Step = 'select-role' | 'master-waiting' | 'slave-enter-pin' | 'connecting' | 'connected' | 'error';
 
