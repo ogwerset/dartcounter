@@ -13,8 +13,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // basePath: '/repo-name',  // Uncomment if using GitHub Pages with repo name
-  // assetPrefix: '/repo-name/',  // Uncomment if using GitHub Pages with repo name
+  basePath: '/dartcounter',
+  assetPrefix: '/dartcounter/',
 };
 
 module.exports = nextConfig;
