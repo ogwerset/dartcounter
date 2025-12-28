@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { GameConfig } from '@/types/game.types';
+import type { DataConnection } from 'peerjs';
 
-const VERSION = 'v1.0.3';
+const VERSION = 'v1.0.4';
 
 const COLORS = [
   { name: 'Blue', value: 'blue-500', hex: '#3b82f6' },
@@ -28,6 +29,14 @@ export default function SetupPage() {
   const [player2Color, setPlayer2Color] = useState<string>(COLORS[1].value);
   const [legsToWin, setLegsToWin] = useState(3);
 
+  // Get connection from window
+  const getConnection = useCallback((): DataConnection | null => {
+    if (typeof window !== 'undefined') {
+      return (window as any).__dartConnection || null;
+    }
+    return null;
+  }, []);
+
   const handleStart = (): void => {
     const config: GameConfig = {
       startingScore: 301,
@@ -40,6 +49,42 @@ export default function SetupPage() {
       { name: player2Name, color: player2Color },
       config
     );
+
+    // Get the updated state after initialization
+    const state = useGameStore.getState();
+    
+    // Send game-start to Slave if connected
+    const conn = getConnection();
+    if (conn) {
+      const sendGameStart = () => {
+        conn.send({
+          type: 'game-start',
+          data: {
+            players: state.players.map(p => ({
+              id: p.id,
+              name: p.name,
+              color: p.color,
+              currentScore: p.currentScore,
+              legsWon: p.legsWon,
+            })),
+            currentPlayerIndex: state.currentPlayerIndex,
+            currentLeg: state.currentLeg,
+            config: {
+              startingScore: 301,
+              legsToWin: config.legsToWin,
+              doubleOut: config.doubleOut,
+            },
+          },
+        });
+        console.log('[Setup] Sent game-start to Slave');
+      };
+      
+      if (conn.open) {
+        sendGameStart();
+      } else {
+        conn.on('open', sendGameStart);
+      }
+    }
 
     router.push('/master');
   };

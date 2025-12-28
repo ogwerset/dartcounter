@@ -2,17 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Smartphone, Monitor, Loader2, Check, X, Copy, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Smartphone, Monitor, Loader2, Check, X, Copy, CheckCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { generatePIN, createMasterPeer, connectToMaster, sendData } from '@/lib/peer/connection';
+import { generatePIN, createMasterPeer, connectToMaster } from '@/lib/peer/connection';
 import { useGameStore } from '@/lib/stores/game-store';
 import type { DataConnection } from 'peerjs';
 import type Peer from 'peerjs';
 
-const VERSION = 'v1.0.3';
+const VERSION = 'v1.0.4';
 
-type Step = 'select-role' | 'master-waiting' | 'slave-enter-pin' | 'connecting' | 'connected' | 'error';
+type Step = 'select-role' | 'master-waiting' | 'slave-enter-pin' | 'connecting' | 'lobby' | 'error';
 
 export default function PairPage() {
   const router = useRouter();
@@ -25,20 +25,91 @@ export default function PairPage() {
   
   const peerRef = useRef<Peer | null>(null);
   const connRef = useRef<DataConnection | null>(null);
-  
-  const gameState = useGameStore();
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (connRef.current) {
-        connRef.current.close();
-      }
-      if (peerRef.current) {
-        peerRef.current.destroy();
-      }
+      // Don't close connection on unmount - we need it for the game
     };
   }, []);
+
+  // Setup message listener for Slave to receive game-start
+  const setupSlaveListener = useCallback((conn: DataConnection) => {
+    console.log('[Lobby] Setting up Slave listener');
+    
+    conn.on('data', (data: unknown) => {
+      console.log('[Lobby/Slave] Received:', data);
+      
+      if (data && typeof data === 'object' && 'type' in data) {
+        const payload = data as { type: string; data: unknown };
+        
+        if (payload.type === 'game-start') {
+          console.log('[Lobby/Slave] Game start received!');
+          const gameData = payload.data as {
+            players: Array<{ id: string; name: string; color: string; currentScore: number; legsWon: number }>;
+            currentPlayerIndex: number;
+            currentLeg: number;
+            config: { startingScore: number; legsToWin: number; doubleOut: boolean };
+          };
+          
+          // Initialize game state on Slave
+          const newPlayers = gameData.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            color: p.color,
+            currentScore: p.currentScore,
+            legsWon: p.legsWon,
+            throws: [],
+          }));
+          useGameStore.setState({
+            players: newPlayers as unknown as [ReturnType<typeof useGameStore.getState>['players'][0], ReturnType<typeof useGameStore.getState>['players'][1]],
+            currentPlayerIndex: gameData.currentPlayerIndex as 0 | 1,
+            currentLeg: gameData.currentLeg,
+            config: {
+              startingScore: 301,
+              legsToWin: gameData.config.legsToWin,
+              doubleOut: gameData.config.doubleOut,
+            },
+            isGameActive: true,
+            currentTurn: [],
+            turnHistory: [],
+            matchWinner: null,
+          });
+          
+          console.log('[Lobby/Slave] Navigating to /slave');
+          router.replace('/slave');
+        }
+        
+        if (payload.type === 'game-sync') {
+          console.log('[Lobby/Slave] Game sync received');
+          const gameData = payload.data as {
+            players: Array<{ currentScore: number; legsWon: number }>;
+            currentPlayerIndex: number;
+            currentTurn: Array<{ segment: number; multiplier: number; points: number }>;
+            currentLeg: number;
+          };
+          
+          const currentState = useGameStore.getState();
+          const updatedPlayers = currentState.players.map((p, idx) => ({
+            ...p,
+            currentScore: gameData.players[idx]?.currentScore ?? p.currentScore,
+            legsWon: gameData.players[idx]?.legsWon ?? p.legsWon,
+          }));
+          useGameStore.setState({
+            players: updatedPlayers as unknown as [typeof currentState.players[0], typeof currentState.players[1]],
+            currentPlayerIndex: gameData.currentPlayerIndex as 0 | 1,
+            currentTurn: gameData.currentTurn.map((t) => ({
+              ...t,
+              multiplier: t.multiplier as 1 | 2 | 3,
+              timestamp: Date.now(),
+            })),
+            currentLeg: gameData.currentLeg,
+            isGameActive: true,
+          });
+        }
+      }
+    });
+  }, [router]);
 
   // Start as Master
   const startAsMaster = useCallback(() => {
@@ -51,22 +122,15 @@ export default function PairPage() {
       newPin,
       (conn) => {
         connRef.current = conn;
-        setStep('connected');
+        console.log('[Pair] Master: Slave connected, going to lobby');
         
-        // Setup data listener for Master
-        conn.on('data', (data) => {
-          console.log('[Master] Received:', data);
-        });
-        
-        console.log('[Pair] Master connection opened, storing in window');
-        // Store connection in window for later use
+        // Store connection in window
         (window as any).__dartConnection = conn;
         (window as any).__dartIsMaster = true;
+        (window as any).__dartPeer = peer;
         
-        // Ensure connection is ready
-        conn.on('open', () => {
-          console.log('[Pair] Master connection confirmed open');
-        });
+        // Go to lobby
+        setStep('lobby');
       },
       (err) => {
         if (err.message.includes('unavailable')) {
@@ -94,55 +158,29 @@ export default function PairPage() {
       return;
     }
     
+    setError(null);
     setStep('connecting');
     
     const peer = connectToMaster(
       inputPin,
       (conn) => {
         connRef.current = conn;
-        setStep('connected');
+        console.log('[Pair] Slave: Connected to Master, going to lobby');
         
-        console.log('[Pair] Slave connection opened, storing in window');
-        // Store connection in window for later use
+        // Store connection in window
         (window as any).__dartConnection = conn;
         (window as any).__dartIsMaster = false;
+        (window as any).__dartPeer = peer;
         
-        // Ensure connection is ready
-        conn.on('open', () => {
-          console.log('[Pair] Slave connection confirmed open');
-        });
+        // Setup listener for game-start
+        setupSlaveListener(conn);
+        
+        // Go to lobby
+        setStep('lobby');
       },
       (data: unknown) => {
-        console.log('[Slave] Received:', data);
-        // Handle game state updates
-        if (data && typeof data === 'object' && 'type' in data) {
-          const payload = data as { type: string; data: unknown };
-          if (payload.type === 'game-sync') {
-            // Update local state
-            const gameData = payload.data as {
-              players: Array<{ currentScore: number; legsWon: number }>;
-              currentPlayerIndex: number;
-              currentTurn: Array<{ segment: number; multiplier: number; points: number }>;
-              currentLeg: number;
-            };
-            
-            useGameStore.setState({
-              players: gameState.players.map((p, idx) => ({
-                ...p,
-                currentScore: gameData.players[idx]?.currentScore ?? p.currentScore,
-                legsWon: gameData.players[idx]?.legsWon ?? p.legsWon,
-              })) as [typeof gameState.players[0], typeof gameState.players[1]],
-              currentPlayerIndex: gameData.currentPlayerIndex as 0 | 1,
-              currentTurn: gameData.currentTurn.map((t) => ({
-                ...t,
-                multiplier: t.multiplier as 1 | 2 | 3,
-                timestamp: Date.now(),
-              })),
-              currentLeg: gameData.currentLeg,
-              isGameActive: true,
-            });
-          }
-        }
+        // This is called during connection setup, also handle messages here
+        console.log('[Pair/Slave] Received during setup:', data);
       },
       (err) => {
         if (err.message.includes('not found') || err.message.includes('Could not connect')) {
@@ -157,13 +195,22 @@ export default function PairPage() {
     peerRef.current = peer;
     
     // Timeout
-    setTimeout(() => {
-      if (step === 'connecting') {
+    const timeoutId = setTimeout(() => {
+      if (!connRef.current) {
         setError('Connection timeout. Check the PIN and try again.');
         setStep('error');
+        peer.destroy();
       }
     }, 15000);
-  }, [inputPin, gameState.players, step]);
+    
+    // Clear timeout if we connect
+    const checkConnection = setInterval(() => {
+      if (connRef.current) {
+        clearTimeout(timeoutId);
+        clearInterval(checkConnection);
+      }
+    }, 100);
+  }, [inputPin, setupSlaveListener]);
 
   // Copy PIN
   const copyPin = useCallback(() => {
@@ -172,19 +219,25 @@ export default function PairPage() {
     setTimeout(() => setCopied(false), 2000);
   }, [pin]);
 
-  // Go to game
-  const goToGame = useCallback(() => {
-    router.replace(isMaster ? '/master' : '/slave');
-  }, [router, isMaster]);
+  // Master: Go to setup game
+  const goToSetup = useCallback(() => {
+    router.push('/setup');
+  }, [router]);
 
   // Reset
   const reset = useCallback(() => {
     if (connRef.current) {
       connRef.current.close();
+      connRef.current = null;
     }
     if (peerRef.current) {
       peerRef.current.destroy();
+      peerRef.current = null;
     }
+    (window as any).__dartConnection = null;
+    (window as any).__dartIsMaster = null;
+    (window as any).__dartPeer = null;
+    
     setStep('select-role');
     setPin('');
     setInputPin('');
@@ -208,7 +261,7 @@ export default function PairPage() {
       </div>
 
       <h1 className="text-2xl font-bold mb-6 text-center">
-        Pair Devices
+        {step === 'lobby' ? 'Lobby' : 'Pair Devices'}
       </h1>
 
       {/* Step: Select Role */}
@@ -254,7 +307,7 @@ export default function PairPage() {
         </div>
       )}
 
-      {/* Step: Master waiting */}
+      {/* Step: Master waiting for Slave */}
       {step === 'master-waiting' && (
         <div className="space-y-8 text-center">
           <div>
@@ -336,18 +389,43 @@ export default function PairPage() {
         </div>
       )}
 
-      {/* Step: Connected */}
-      {step === 'connected' && (
-        <div className="flex flex-col items-center gap-6 py-12">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20">
-            <Check className="h-8 w-8 text-green-400" />
+      {/* Step: Lobby */}
+      {step === 'lobby' && (
+        <div className="flex flex-col items-center gap-6 py-8">
+          <div className="flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20">
+            <Users className="h-10 w-10 text-green-400" />
           </div>
-          <p className="text-xl font-semibold text-green-400">Connected!</p>
-          <p className="text-zinc-400 text-center">
-            Devices are now paired
-          </p>
-          <Button onClick={goToGame} size="lg">
-            Start Game
+          
+          <div className="text-center">
+            <p className="text-xl font-semibold text-green-400 mb-2">Connected!</p>
+            <p className="text-zinc-400">
+              {isMaster ? 'Slave is connected and ready' : 'Connected to Master'}
+            </p>
+          </div>
+          
+          {isMaster ? (
+            <div className="space-y-4 w-full max-w-xs">
+              <Button onClick={goToSetup} size="lg" className="w-full">
+                Setup Game
+              </Button>
+              <p className="text-sm text-zinc-500 text-center">
+                Configure players and start the game
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-zinc-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Waiting for Master to start the game...</span>
+              </div>
+              <p className="text-sm text-zinc-500">
+                You&apos;ll be redirected automatically
+              </p>
+            </div>
+          )}
+          
+          <Button variant="outline" size="sm" onClick={reset} className="mt-4">
+            Disconnect
           </Button>
         </div>
       )}
