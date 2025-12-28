@@ -10,7 +10,7 @@ import { formatThrow } from '@/lib/game-logic/scoring';
 import type { DataConnection } from 'peerjs';
 import type { Turn } from '@/types/game.types';
 
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.5.0';
 
 // Duration to show last turn summary (in ms)
 const TURN_DISPLAY_DURATION = 5000;

@@ -5,7 +5,7 @@
 
 import type { Point } from './types';
 import { captureFrame, captureFrameAsDataURL } from './camera';
-import { detectBoard, BoardDetectorSmoother } from './board-detector';
+import { detectBoard, BoardDetectorSmoother } from './enhanced-board-detector';
 import { 
   updateMotionState, 
   createMotionState, 

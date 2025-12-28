@@ -16,7 +16,7 @@ import { DartTracker } from '@/lib/vision/dart-tracker';
 import type { DataConnection } from 'peerjs';
 import type { Point } from '@/lib/vision/types';
 
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.5.0';
 
 type InputMode = 'numpad' | 'camera';
 
@@ -332,7 +332,7 @@ export default function MasterPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl p-4 py-6">
+    <div className="container mx-auto max-w-2xl p-4 py-6 w-full">
       <div className="mb-4 flex items-center justify-between">
         <Button
           variant="ghost"
