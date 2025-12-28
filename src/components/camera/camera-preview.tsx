@@ -232,7 +232,6 @@ export function CameraPreview({
         playsInline
         muted
         autoPlay
-        style={{ transform: 'scaleX(-1)' }} // Mirror for better UX
       />
 
       {/* Loading overlay - shows when isLoading */}

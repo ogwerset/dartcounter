@@ -11,14 +11,12 @@ import { PlayerIndicator } from '@/components/game/player-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
 import { CameraPreview } from '@/components/camera/camera-preview';
 import { CalibrationScreen } from '@/components/camera/calibration-screen';
-import { DetectionResultDisplay } from '@/components/camera/detection-result';
 import { BoardOverlay } from '@/components/camera/board-overlay';
 import { useGameStore } from '@/lib/stores/game-store';
 import { loadCalibration, isCalibrationComplete } from '@/lib/vision/calibration';
-import { detectDart, createDartDetector } from '@/lib/vision/dart-detector';
-import { mapToSegment } from '@/lib/vision/board-mapper';
+import { DartTracker } from '@/lib/vision/dart-tracker';
 import type { DataConnection } from 'peerjs';
-import type { CalibrationData, DetectionResult, Point } from '@/lib/vision/types';
+import type { CalibrationData, Point } from '@/lib/vision/types';
 
 const VERSION = 'v1.2.0';
 
@@ -47,10 +45,10 @@ export default function MasterPage() {
   // Camera/detection state
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
-  const [detectedPoint, setDetectedPoint] = useState<Point | null>(null);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const detectorRef = useRef<ReturnType<typeof createDartDetector> | null>(null);
+  const trackerRef = useRef<DartTracker | null>(null);
+  const [trackerState, setTrackerState] = useState<'idle' | 'waiting-dart-1' | 'waiting-dart-2' | 'waiting-dart-3' | 'turn-complete' | 'waiting-removal'>('idle');
+  const [detectedDartCount, setDetectedDartCount] = useState(0);
+  const [lastDetectedDart, setLastDetectedDart] = useState<{ segment: number; multiplier: number; points: number } | null>(null);
   
   // Load calibration on mount
   useEffect(() => {
@@ -219,91 +217,83 @@ export default function MasterPage() {
   const handleVideoReady = useCallback((video: HTMLVideoElement, canvas: HTMLCanvasElement) => {
     videoRef.current = video;
     canvasRef.current = canvas;
-  }, []);
-  
-  // Start/stop detection
-  const startDetection = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !calibration) return;
     
-    setIsDetecting(true);
-    setDetectionResult(null);
-    setDetectedPoint(null);
-    
-    detectorRef.current = createDartDetector(
-      videoRef.current,
-      canvasRef.current,
-      calibration,
-      async (result) => {
-        if (result.detected && result.dartTip && result.normalizedPosition) {
-          // Stop detection
-          detectorRef.current?.stop();
-          setIsDetecting(false);
-          
-          // Map to segment
-          const mapped = mapToSegment(
-            result.normalizedPosition,
-            result.dartTip,
-            result.confidence
-          );
-          
-          setDetectionResult(mapped);
-          setDetectedPoint(result.dartTip);
-        }
-      },
-      1000 // 1 second debounce
-    );
-    
-    detectorRef.current.start();
-  }, [calibration]);
-  
-  const stopDetection = useCallback(() => {
-    detectorRef.current?.stop();
-    setIsDetecting(false);
-  }, []);
-  
-  // Manual scan trigger
-  const handleManualScan = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || !calibration) return;
-    
-    setIsDetecting(true);
-    
-    const result = await detectDart(videoRef.current, canvasRef.current, calibration);
-    
-    setIsDetecting(false);
-    
-    if (result.detected && result.dartTip && result.normalizedPosition) {
-      const mapped = mapToSegment(
-        result.normalizedPosition,
-        result.dartTip,
-        result.confidence
-      );
-      
-      setDetectionResult(mapped);
-      setDetectedPoint(result.dartTip);
+    // Initialize tracker if calibration is ready
+    if (calibration && isCalibrationComplete(calibration)) {
+      initializeTracker(video, canvas, calibration);
     }
   }, [calibration]);
   
-  // Confirm detected throw
-  const handleConfirmDetection = useCallback(() => {
-    if (!detectionResult) return;
+  // Initialize dart tracker
+  const initializeTracker = useCallback((
+    video: HTMLVideoElement,
+    canvas: HTMLCanvasElement,
+    cal: CalibrationData
+  ) => {
+    if (trackerRef.current) {
+      trackerRef.current.stop();
+    }
     
-    addThrow({
-      segment: detectionResult.segment,
-      multiplier: detectionResult.multiplier,
+    const tracker = new DartTracker({
+      onDartDetected: (dart, dartNumber) => {
+        console.log(`[Master] Dart ${dartNumber} detected:`, dart);
+        setDetectedDartCount(dartNumber);
+        setLastDetectedDart({
+          segment: dart.segment,
+          multiplier: dart.multiplier,
+          points: dart.points,
+        });
+        
+        // Automatically add throw
+        addThrow({
+          segment: dart.segment,
+          multiplier: dart.multiplier,
+        });
+        
+        // Send state
+        setTimeout(() => sendGameState(), 50);
+      },
+      onTurnComplete: (darts) => {
+        console.log('[Master] Turn complete:', darts);
+        setTrackerState('turn-complete');
+      },
+      onStateChange: (state) => {
+        setTrackerState(state);
+        console.log('[Master] Tracker state:', state);
+      },
     });
     
-    setDetectionResult(null);
-    setDetectedPoint(null);
+    tracker.initialize(video, canvas, cal);
+    trackerRef.current = tracker;
     
-    // Send state
-    setTimeout(() => sendGameState(), 50);
-  }, [detectionResult, addThrow, sendGameState]);
+    // Start continuous detection
+    tracker.start();
+    
+    // Start first turn
+    tracker.startTurn();
+  }, [addThrow, sendGameState]);
   
-  // Retry detection
-  const handleRetryDetection = useCallback(() => {
-    setDetectionResult(null);
-    setDetectedPoint(null);
-  }, []);
+  // Re-initialize tracker when calibration changes
+  useEffect(() => {
+    if (videoRef.current && canvasRef.current && calibration && isCalibrationComplete(calibration)) {
+      initializeTracker(videoRef.current, canvasRef.current, calibration);
+    }
+    
+    return () => {
+      if (trackerRef.current) {
+        trackerRef.current.stop();
+      }
+    };
+  }, [calibration, initializeTracker]);
+  
+  // Reset tracker when turn completes or player changes
+  useEffect(() => {
+    if (trackerRef.current && currentTurn.length === 0 && trackerState === 'waiting-removal') {
+      // Turn was completed, tracker will auto-start next turn
+      setDetectedDartCount(0);
+      setLastDetectedDart(null);
+    }
+  }, [currentTurn.length, trackerState]);
   
   // Handle calibration complete
   const handleCalibrationComplete = useCallback((cal: CalibrationData) => {
@@ -463,7 +453,6 @@ export default function MasterPage() {
                     onVideoReady={handleVideoReady}
                     calibration={calibration}
                     showOverlay={true}
-                    detectedPoint={detectedPoint}
                   >
                     {/* Board overlay */}
                     {calibration && videoRef.current && (
@@ -471,22 +460,39 @@ export default function MasterPage() {
                         calibration={calibration}
                         videoWidth={videoRef.current.videoWidth || 1920}
                         videoHeight={videoRef.current.videoHeight || 1080}
-                        detectedPoint={detectedPoint}
-                        highlightedSegment={detectionResult ? {
-                          segment: detectionResult.segment,
-                          multiplier: detectionResult.multiplier,
+                        highlightedSegment={lastDetectedDart ? {
+                          segment: lastDetectedDart.segment,
+                          multiplier: lastDetectedDart.multiplier,
                         } : null}
                       />
                     )}
                   </CameraPreview>
                   
-                  {/* Detection result overlay */}
-                  {detectionResult && (
-                    <DetectionResultDisplay
-                      result={detectionResult}
-                      onConfirm={handleConfirmDetection}
-                      onRetry={handleRetryDetection}
-                    />
+                  {/* Tracker status overlay */}
+                  {trackerState !== 'idle' && (
+                    <div className="absolute top-4 left-4 right-4 bg-zinc-900/90 backdrop-blur-sm rounded-lg p-3 z-30">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-300">
+                            {trackerState === 'waiting-dart-1' && 'Waiting for Dart 1/3...'}
+                            {trackerState === 'waiting-dart-2' && 'Waiting for Dart 2/3...'}
+                            {trackerState === 'waiting-dart-3' && 'Waiting for Dart 3/3...'}
+                            {trackerState === 'turn-complete' && 'Turn Complete!'}
+                            {trackerState === 'waiting-removal' && 'Remove darts to continue...'}
+                          </div>
+                          {lastDetectedDart && (
+                            <div className="text-xs text-zinc-400 mt-1">
+                              Last: {lastDetectedDart.segment > 0 
+                                ? `${lastDetectedDart.multiplier === 3 ? 'T' : lastDetectedDart.multiplier === 2 ? 'D' : 'S'}${lastDetectedDart.segment}` 
+                                : 'Miss'} ({lastDetectedDart.points} pts)
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-lg font-bold text-green-400">
+                          {detectedDartCount}/3
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </>
               ) : (
@@ -503,8 +509,20 @@ export default function MasterPage() {
             </div>
             
             {/* Camera controls */}
-            {isCalibrationComplete(calibration) && !detectionResult && (
+            {isCalibrationComplete(calibration) && (
               <div className="flex gap-4 mt-4 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (trackerRef.current) {
+                      trackerRef.current.reset();
+                      trackerRef.current.startTurn();
+                    }
+                  }}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Reset Turn
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowCalibration(true)}
@@ -512,17 +530,10 @@ export default function MasterPage() {
                   <Settings className="w-4 h-4 mr-2" />
                   Recalibrate
                 </Button>
-                <Button
-                  onClick={handleManualScan}
-                  disabled={isDetecting || currentTurn.length >= 3}
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  {isDetecting ? 'Scanning...' : 'Scan Dart'}
-                </Button>
               </div>
             )}
             
-            {/* Miss and Next buttons for camera mode */}
+            {/* Manual controls for camera mode (fallback) */}
             <div className="flex gap-4 mt-4 justify-center">
               <Button
                 variant="outline"
