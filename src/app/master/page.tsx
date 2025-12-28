@@ -18,7 +18,7 @@ import { DartTracker } from '@/lib/vision/dart-tracker';
 import type { DataConnection } from 'peerjs';
 import type { CalibrationData, Point } from '@/lib/vision/types';
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 
 type InputMode = 'numpad' | 'camera';
 
