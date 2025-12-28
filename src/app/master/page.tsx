@@ -1,18 +1,28 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useCallback } from 'react';
-import { ArrowLeft, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useCallback, useState, useRef } from 'react';
+import { ArrowLeft, Wifi, WifiOff, Camera, Keyboard, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Numpad } from '@/components/game/numpad';
 import { CurrentTurn } from '@/components/game/current-turn';
 import { PlayerIndicator } from '@/components/game/player-indicator';
 import { TurnHistory } from '@/components/game/turn-history';
+import { CameraPreview } from '@/components/camera/camera-preview';
+import { CalibrationScreen } from '@/components/camera/calibration-screen';
+import { DetectionResultDisplay } from '@/components/camera/detection-result';
+import { BoardOverlay } from '@/components/camera/board-overlay';
 import { useGameStore } from '@/lib/stores/game-store';
+import { loadCalibration, isCalibrationComplete } from '@/lib/vision/calibration';
+import { detectDart, createDartDetector } from '@/lib/vision/dart-detector';
+import { mapToSegment } from '@/lib/vision/board-mapper';
 import type { DataConnection } from 'peerjs';
+import type { CalibrationData, DetectionResult, Point } from '@/lib/vision/types';
 
-const VERSION = 'v1.0.6';
+const VERSION = 'v1.1.0';
+
+type InputMode = 'numpad' | 'camera';
 
 export default function MasterPage() {
   const router = useRouter();
@@ -28,6 +38,27 @@ export default function MasterPage() {
     nextPlayer,
     clearCurrentTurn,
   } = useGameStore();
+  
+  // Input mode state
+  const [inputMode, setInputMode] = useState<InputMode>('numpad');
+  const [showCalibration, setShowCalibration] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationData | null>(null);
+  
+  // Camera/detection state
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
+  const [detectedPoint, setDetectedPoint] = useState<Point | null>(null);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const detectorRef = useRef<ReturnType<typeof createDartDetector> | null>(null);
+  
+  // Load calibration on mount
+  useEffect(() => {
+    const saved = loadCalibration();
+    if (saved) {
+      setCalibration(saved);
+    }
+  }, []);
   
   // Get PeerJS connection from window (set during pairing)
   const getConnection = useCallback((): DataConnection | null => {
@@ -184,6 +215,102 @@ export default function MasterPage() {
     }
   }, [players, currentPlayerIndex, currentTurn, turnHistory, currentLeg, isGameActive, sendGameState]);
 
+  // Handle camera ready
+  const handleVideoReady = useCallback((video: HTMLVideoElement, canvas: HTMLCanvasElement) => {
+    videoRef.current = video;
+    canvasRef.current = canvas;
+  }, []);
+  
+  // Start/stop detection
+  const startDetection = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !calibration) return;
+    
+    setIsDetecting(true);
+    setDetectionResult(null);
+    setDetectedPoint(null);
+    
+    detectorRef.current = createDartDetector(
+      videoRef.current,
+      canvasRef.current,
+      calibration,
+      async (result) => {
+        if (result.detected && result.dartTip && result.normalizedPosition) {
+          // Stop detection
+          detectorRef.current?.stop();
+          setIsDetecting(false);
+          
+          // Map to segment
+          const mapped = mapToSegment(
+            result.normalizedPosition,
+            result.dartTip,
+            result.confidence
+          );
+          
+          setDetectionResult(mapped);
+          setDetectedPoint(result.dartTip);
+        }
+      },
+      1000 // 1 second debounce
+    );
+    
+    detectorRef.current.start();
+  }, [calibration]);
+  
+  const stopDetection = useCallback(() => {
+    detectorRef.current?.stop();
+    setIsDetecting(false);
+  }, []);
+  
+  // Manual scan trigger
+  const handleManualScan = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current || !calibration) return;
+    
+    setIsDetecting(true);
+    
+    const result = await detectDart(videoRef.current, canvasRef.current, calibration);
+    
+    setIsDetecting(false);
+    
+    if (result.detected && result.dartTip && result.normalizedPosition) {
+      const mapped = mapToSegment(
+        result.normalizedPosition,
+        result.dartTip,
+        result.confidence
+      );
+      
+      setDetectionResult(mapped);
+      setDetectedPoint(result.dartTip);
+    }
+  }, [calibration]);
+  
+  // Confirm detected throw
+  const handleConfirmDetection = useCallback(() => {
+    if (!detectionResult) return;
+    
+    addThrow({
+      segment: detectionResult.segment,
+      multiplier: detectionResult.multiplier,
+    });
+    
+    setDetectionResult(null);
+    setDetectedPoint(null);
+    
+    // Send state
+    setTimeout(() => sendGameState(), 50);
+  }, [detectionResult, addThrow, sendGameState]);
+  
+  // Retry detection
+  const handleRetryDetection = useCallback(() => {
+    setDetectionResult(null);
+    setDetectedPoint(null);
+  }, []);
+  
+  // Handle calibration complete
+  const handleCalibrationComplete = useCallback((cal: CalibrationData) => {
+    setCalibration(cal);
+    setShowCalibration(false);
+  }, []);
+
   if (!isGameActive) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -194,6 +321,16 @@ export default function MasterPage() {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+  
+  // Show calibration screen
+  if (showCalibration) {
+    return (
+      <CalibrationScreen
+        onComplete={handleCalibrationComplete}
+        onCancel={() => setShowCalibration(false)}
+      />
     );
   }
 
@@ -237,6 +374,25 @@ export default function MasterPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
+        
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={inputMode === 'numpad' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setInputMode('numpad')}
+          >
+            <Keyboard className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={inputMode === 'camera' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setInputMode('camera')}
+          >
+            <Camera className="h-4 w-4" />
+          </Button>
+        </div>
+        
         <button
           onClick={() => !isConnected && router.push('/pair')}
           className="flex items-center gap-2 text-sm transition-opacity hover:opacity-80"
@@ -250,7 +406,7 @@ export default function MasterPage() {
           ) : (
             <>
               <WifiOff className="h-4 w-4 text-zinc-500" />
-              <span className="text-zinc-500">Offline - Tap to pair</span>
+              <span className="text-zinc-500">Offline</span>
             </>
           )}
         </button>
@@ -283,18 +439,107 @@ export default function MasterPage() {
         </CardContent>
       </Card>
 
-      {/* Numpad */}
-      <Card className="mb-4">
-        <CardContent className="pt-6">
-          <Numpad
-            onThrow={handleThrow}
-            onMiss={handleMiss}
-            onClear={clearCurrentTurn}
-            onNext={handleNext}
-            canConfirm={canConfirm}
-          />
-        </CardContent>
-      </Card>
+      {/* Input Area - Numpad or Camera */}
+      {inputMode === 'numpad' ? (
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <Numpad
+              onThrow={handleThrow}
+              onMiss={handleMiss}
+              onClear={clearCurrentTurn}
+              onNext={handleNext}
+              canConfirm={canConfirm}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            {/* Camera mode */}
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-zinc-900">
+              {isCalibrationComplete(calibration) ? (
+                <>
+                  <CameraPreview
+                    onVideoReady={handleVideoReady}
+                    calibration={calibration}
+                    showOverlay={true}
+                    detectedPoint={detectedPoint}
+                  >
+                    {/* Board overlay */}
+                    {calibration && videoRef.current && (
+                      <BoardOverlay
+                        calibration={calibration}
+                        videoWidth={videoRef.current.videoWidth || 1920}
+                        videoHeight={videoRef.current.videoHeight || 1080}
+                        detectedPoint={detectedPoint}
+                        highlightedSegment={detectionResult ? {
+                          segment: detectionResult.segment,
+                          multiplier: detectionResult.multiplier,
+                        } : null}
+                      />
+                    )}
+                  </CameraPreview>
+                  
+                  {/* Detection result overlay */}
+                  {detectionResult && (
+                    <DetectionResultDisplay
+                      result={detectionResult}
+                      onConfirm={handleConfirmDetection}
+                      onRetry={handleRetryDetection}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <Camera className="w-12 h-12 text-zinc-500 mb-4" />
+                  <p className="text-zinc-400 mb-4">Camera not calibrated</p>
+                  <Button onClick={() => setShowCalibration(true)}>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Calibrate
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            {/* Camera controls */}
+            {isCalibrationComplete(calibration) && !detectionResult && (
+              <div className="flex gap-4 mt-4 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCalibration(true)}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Recalibrate
+                </Button>
+                <Button
+                  onClick={handleManualScan}
+                  disabled={isDetecting || currentTurn.length >= 3}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  {isDetecting ? 'Scanning...' : 'Scan Dart'}
+                </Button>
+              </div>
+            )}
+            
+            {/* Miss and Next buttons for camera mode */}
+            <div className="flex gap-4 mt-4 justify-center">
+              <Button
+                variant="outline"
+                onClick={handleMiss}
+                disabled={currentTurn.length >= 3}
+              >
+                Miss
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!canConfirm}
+              >
+                Next Player
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Turn History */}
       <Card>
@@ -313,4 +558,3 @@ export default function MasterPage() {
     </div>
   );
 }
-

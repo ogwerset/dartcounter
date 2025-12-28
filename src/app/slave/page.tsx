@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/lib/stores/game-store';
@@ -10,7 +10,7 @@ import { formatThrow } from '@/lib/game-logic/scoring';
 import type { DataConnection } from 'peerjs';
 import type { Turn } from '@/types/game.types';
 
-const VERSION = 'v1.0.6';
+const VERSION = 'v1.1.0';
 
 // Duration to show last turn summary (in ms)
 const TURN_DISPLAY_DURATION = 5000;
@@ -25,6 +25,16 @@ const COLOR_MAP: Record<string, string> = {
   'pink-500': '#ec4899',
 };
 
+// Generate glow shadow for a color
+const getGlowStyle = (color: string) => ({
+  textShadow: `
+    0 0 20px ${color}60,
+    0 0 40px ${color}40,
+    0 0 80px ${color}20,
+    0 0 120px ${color}10
+  `.trim(),
+});
+
 export default function SlavePage() {
   const router = useRouter();
   const { players, currentPlayerIndex, currentTurn, turnHistory, isGameActive, config } =
@@ -32,6 +42,7 @@ export default function SlavePage() {
   
   // State for showing last completed turn
   const [showLastTurn, setShowLastTurn] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   const [lastTurn, setLastTurn] = useState<Turn | null>(null);
   const [lastTurnPlayer, setLastTurnPlayer] = useState<string>('');
   const [lastTurnPlayerColor, setLastTurnPlayerColor] = useState<string>('#00ff88');
@@ -45,12 +56,12 @@ export default function SlavePage() {
   const connectionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Get PeerJS connection from window
-  const getConnection = (): DataConnection | null => {
+  const getConnection = useCallback((): DataConnection | null => {
     if (typeof window !== 'undefined') {
       return (window as any).__dartConnection || null;
     }
     return null;
-  };
+  }, []);
   
   // Monitor connection status
   useEffect(() => {
@@ -71,7 +82,7 @@ export default function SlavePage() {
         clearInterval(connectionCheckIntervalRef.current);
       }
     };
-  }, []);
+  }, [getConnection]);
   
   // Detect when a turn is completed and show summary
   useEffect(() => {
@@ -84,6 +95,7 @@ export default function SlavePage() {
       setLastTurnPlayer(player?.name || 'Player');
       setLastTurnPlayerColor(COLOR_MAP[player?.color || 'green-500'] || '#00ff88');
       setShowLastTurn(true);
+      setIsExiting(false);
       setTurnProgress(100);
       
       // Clear any existing timers
@@ -102,10 +114,15 @@ export default function SlavePage() {
         setTurnProgress(remaining);
       }, 16); // ~60fps
       
-      // Hide after duration
+      // Start exit animation before hiding
       lastTurnTimerRef.current = setTimeout(() => {
-        setShowLastTurn(false);
-        setTurnProgress(100);
+        setIsExiting(true);
+        // Actually hide after exit animation
+        setTimeout(() => {
+          setShowLastTurn(false);
+          setIsExiting(false);
+          setTurnProgress(100);
+        }, 300);
         if (progressTimerRef.current) {
           clearInterval(progressTimerRef.current);
         }
@@ -238,16 +255,19 @@ export default function SlavePage() {
       conn.off('close');
       conn.off('error');
     };
-  }, []);
+  }, [getConnection]);
 
   if (!isGameActive) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-zinc-950">
+      <div 
+        className="flex flex-col items-center justify-center p-4 bg-zinc-950"
+        style={{ minHeight: '100dvh' }}
+      >
         <div className="text-center">
-          <p className="mb-4 text-[clamp(2rem,8vw,5rem)]">Waiting for game...</p>
+          <p className="mb-4 text-[clamp(2rem,10vw,6rem)] font-bold">Waiting for game...</p>
           <button 
             onClick={() => router.push('/pair')}
-            className="text-primary underline text-[clamp(1.2rem,4vw,2rem)]"
+            className="text-primary underline text-[clamp(1.5rem,5vw,2.5rem)]"
           >
             Go to pairing
           </button>
@@ -260,70 +280,111 @@ export default function SlavePage() {
   const otherPlayer = players[currentPlayerIndex === 0 ? 1 : 0];
   const checkoutOptions = getCheckoutOptions(currentPlayer.currentScore);
   const playerColor = COLOR_MAP[currentPlayer.color] || '#00ff88';
+  const otherPlayerColor = COLOR_MAP[otherPlayer.color] || '#666';
   const turnTotal = currentTurn.reduce((sum, t) => sum + t.points, 0);
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col overflow-hidden">
+    <div 
+      className="bg-zinc-950 flex flex-col overflow-hidden"
+      style={{ 
+        minHeight: '100dvh',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
+    >
       {/* Connection status with reconnect button */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+      <div 
+        className="absolute right-2 z-10 flex items-center gap-2"
+        style={{ top: 'max(0.5rem, env(safe-area-inset-top))' }}
+      >
         {connectionStatus === 'disconnected' && (
           <Button
             onClick={() => router.push('/pair')}
             size="sm"
             variant="destructive"
-            className="text-xs"
+            className="text-sm font-bold"
           >
-            <RefreshCw className="h-3 w-3 mr-1" />
+            <RefreshCw className="h-4 w-4 mr-1" />
             Reconnect
           </Button>
         )}
-        <div className={`flex items-center gap-1 text-xs ${connectionStatus === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
+        <div className={`flex items-center gap-1 ${connectionStatus === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
           {connectionStatus === 'connected' ? (
-            <Wifi className="h-4 w-4" />
+            <Wifi className="h-5 w-5" />
           ) : (
-            <WifiOff className="h-4 w-4" />
+            <WifiOff className="h-5 w-5" />
           )}
-          <span className="hidden sm:inline">
-            {connectionStatus === 'connected' ? 'Live' : 'Offline'}
-          </span>
         </div>
       </div>
 
       {/* Last Turn Summary Overlay with Progress Bar */}
       {showLastTurn && lastTurn && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-950/98 animate-in fade-in duration-300">
-          {/* Progress bar at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-2 bg-zinc-800">
+        <div 
+          className={`absolute inset-0 z-20 flex flex-col items-center justify-center transition-all duration-300 ${
+            isExiting ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+          }`}
+          style={{
+            background: `radial-gradient(ellipse at center, rgba(9, 9, 11, 0.97) 0%, rgba(9, 9, 11, 0.99) 100%)`,
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          {/* Progress bar at bottom - thicker */}
+          <div 
+            className="absolute left-0 right-0 h-3 bg-zinc-800"
+            style={{ bottom: 'env(safe-area-inset-bottom)' }}
+          >
             <div 
-              className="h-full transition-all duration-75 ease-linear"
+              className="h-full transition-all duration-100 ease-linear"
               style={{ 
                 width: `${turnProgress}%`,
-                backgroundColor: lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor
+                backgroundColor: lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor,
+                boxShadow: `0 0 20px ${lastTurn.isBust ? '#ef4444' : lastTurnPlayerColor}`,
               }}
             />
           </div>
           
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-4 sm:space-y-8 px-4">
+            {/* Player name - animated */}
             <div 
-              className="text-[clamp(2rem,8vw,5rem)] font-bold"
-              style={{ color: lastTurnPlayerColor }}
+              className="text-[clamp(2.5rem,10vw,7rem)] font-black tracking-wider animate-in slide-in-from-top-4 fade-in duration-500"
+              style={{ 
+                color: lastTurnPlayerColor,
+                textWrap: 'balance',
+              }}
             >
               {lastTurnPlayer.toUpperCase()}
             </div>
+            
+            {/* Score/BUST - animated with glow */}
             <div 
-              className={`text-[clamp(8rem,40vw,25rem)] font-black leading-none ${lastTurn.isBust ? 'text-red-500' : ''}`}
-              style={!lastTurn.isBust ? { color: lastTurnPlayerColor } : {}}
+              className={`text-[clamp(10rem,50vw,35rem)] font-black leading-none animate-in zoom-in-95 fade-in duration-500 delay-150 ${lastTurn.isBust ? 'text-red-500' : ''}`}
+              style={!lastTurn.isBust ? { 
+                color: lastTurnPlayerColor,
+                ...getGlowStyle(lastTurnPlayerColor),
+              } : {
+                textShadow: '0 0 40px #ef444480, 0 0 80px #ef444440',
+              }}
             >
               {lastTurn.isBust ? 'BUST!' : lastTurn.totalPoints}
             </div>
-            <div className="flex justify-center gap-6 text-[clamp(2rem,8vw,4rem)]">
+            
+            {/* Throws - staggered animation */}
+            <div className="flex justify-center gap-4 sm:gap-8">
               {lastTurn.throws.map((t, i) => (
-                <span 
+                <div 
                   key={i} 
-                  className="text-zinc-300 font-bold"
+                  className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl px-4 py-2 sm:px-8 sm:py-4 border-2 animate-in slide-in-from-bottom-4 fade-in duration-500"
+                  style={{ 
+                    animationDelay: `${200 + i * 100}ms`,
+                    borderColor: lastTurnPlayerColor,
+                    color: lastTurnPlayerColor,
+                  }}
                 >
-                  {formatThrow(t)}
-                </span>
+                  <span className="text-[clamp(2.5rem,10vw,6rem)] font-black">
+                    {formatThrow(t)}
+                  </span>
+                </div>
               ))}
             </div>
           </div>
@@ -337,18 +398,21 @@ export default function SlavePage() {
         <div className="flex-1 flex flex-col items-center justify-center w-full">
           {/* Player Name */}
           <div 
-            className="text-[clamp(2rem,8vw,6rem)] font-bold tracking-wide mb-2"
-            style={{ color: playerColor }}
+            className="text-[clamp(2.5rem,10vw,8rem)] font-black tracking-wider mb-2"
+            style={{ 
+              color: playerColor,
+              textWrap: 'balance',
+            }}
           >
             {currentPlayer.name.toUpperCase()}
           </div>
           
-          {/* MEGA Score - The main attraction - MUCH BIGGER */}
+          {/* MEGA Score - MAXIMUM SIZE with dynamic glow */}
           <div
-            className="text-center font-black tabular-nums leading-none text-[clamp(10rem,50vw,35rem)]"
+            className="text-center font-black tabular-nums leading-none text-[clamp(12rem,55vw,40rem)]"
             style={{ 
               color: playerColor,
-              textShadow: `0 0 40px ${playerColor}80, 0 0 80px ${playerColor}40`
+              ...getGlowStyle(playerColor),
             }}
           >
             {currentPlayer.currentScore}
@@ -356,14 +420,16 @@ export default function SlavePage() {
           
           {/* Current Turn Throws - with player color */}
           {currentTurn.length > 0 && (
-            <div className="flex items-center gap-4 mt-6">
+            <div className="flex items-center gap-3 sm:gap-6 mt-4 sm:mt-8">
               {currentTurn.map((t, i) => (
                 <div 
                   key={i} 
-                  className="bg-zinc-800 rounded-xl px-6 py-3 text-[clamp(2rem,8vw,5rem)] font-bold border-2"
+                  className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl px-4 py-2 sm:px-8 sm:py-4 text-[clamp(2.5rem,10vw,6rem)] font-black border-3"
                   style={{ 
                     borderColor: playerColor,
-                    color: playerColor
+                    borderWidth: '3px',
+                    color: playerColor,
+                    boxShadow: `0 0 20px ${playerColor}40`,
                   }}
                 >
                   {formatThrow(t)}
@@ -373,7 +439,8 @@ export default function SlavePage() {
               {Array.from({ length: 3 - currentTurn.length }).map((_, i) => (
                 <div 
                   key={`empty-${i}`}
-                  className="bg-zinc-900 border-2 border-zinc-700 rounded-xl px-6 py-3 text-[clamp(2rem,8vw,5rem)] text-zinc-600"
+                  className="bg-zinc-900/50 border-3 border-zinc-700 rounded-2xl px-4 py-2 sm:px-8 sm:py-4 text-[clamp(2.5rem,10vw,6rem)] text-zinc-600"
+                  style={{ borderWidth: '3px' }}
                 >
                   —
                 </div>
@@ -381,11 +448,14 @@ export default function SlavePage() {
             </div>
           )}
           
-          {/* Turn Total - with player color */}
+          {/* Turn Total - with player color and glow */}
           {currentTurn.length > 0 && (
             <div 
-              className="mt-4 text-[clamp(1.5rem,6vw,3rem)] font-bold"
-              style={{ color: playerColor }}
+              className="mt-4 sm:mt-6 text-[clamp(2rem,8vw,4rem)] font-black"
+              style={{ 
+                color: playerColor,
+                textShadow: `0 0 20px ${playerColor}60`,
+              }}
             >
               Turn: {turnTotal}
             </div>
@@ -393,44 +463,56 @@ export default function SlavePage() {
           
           {/* Checkout Options */}
           {checkoutOptions.length > 0 && currentPlayer.currentScore <= 170 && (
-            <div className="mt-6 text-center">
-              <div className="text-[clamp(1rem,4vw,1.8rem)] text-zinc-500 mb-2 font-semibold">
+            <div className="mt-4 sm:mt-8 text-center">
+              <div className="text-[clamp(1.2rem,5vw,2rem)] text-zinc-500 mb-2 font-bold tracking-wider">
                 CHECKOUT
               </div>
-              <div className="text-[clamp(1.2rem,5vw,2.5rem)] font-bold text-yellow-400">
+              <div className="text-[clamp(1.5rem,6vw,3rem)] font-bold text-yellow-400">
                 {checkoutOptions.slice(0, 3).join(' • ')}
               </div>
             </div>
           )}
         </div>
 
-        {/* Bottom Bar - Other player + Legs - BIGGER */}
-        <div className="w-full max-w-4xl px-4 pb-2">
-          <div className="flex items-center justify-between bg-zinc-900/70 rounded-2xl p-4 backdrop-blur-sm">
+        {/* Bottom Bar - Other player + Legs - BIGGER & STICKY */}
+        <div 
+          className="w-full max-w-5xl px-2 sm:px-4"
+          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex items-center justify-between bg-zinc-900/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-3 sm:p-6">
             {/* Other Player */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-6">
               <div 
-                className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: COLOR_MAP[otherPlayer.color] || '#666' }}
+                className="w-4 h-4 sm:w-6 sm:h-6 rounded-full"
+                style={{ 
+                  backgroundColor: otherPlayerColor,
+                  boxShadow: `0 0 10px ${otherPlayerColor}`,
+                }}
               />
-              <span className="text-[clamp(1.2rem,4vw,2rem)] text-zinc-400 font-semibold">
+              <span 
+                className="text-[clamp(1.5rem,5vw,2.5rem)] font-bold"
+                style={{ color: otherPlayerColor }}
+              >
                 {otherPlayer.name}
               </span>
               <span 
-                className="text-[clamp(1.8rem,6vw,3.5rem)] font-black"
-                style={{ color: COLOR_MAP[otherPlayer.color] || '#fff' }}
+                className="text-[clamp(2rem,8vw,4rem)] font-black"
+                style={{ 
+                  color: otherPlayerColor,
+                  textShadow: `0 0 15px ${otherPlayerColor}60`,
+                }}
               >
                 {otherPlayer.currentScore}
               </span>
             </div>
             
             {/* Legs */}
-            <div className="flex items-center gap-3 text-[clamp(1.2rem,4vw,2rem)]">
-              <span className="text-zinc-500 font-semibold">Legs:</span>
+            <div className="flex items-center gap-2 sm:gap-4 text-[clamp(1.5rem,5vw,2.5rem)]">
+              <span className="text-zinc-500 font-bold">Legs:</span>
               <span className="font-black text-white">
                 {players[0].legsWon} - {players[1].legsWon}
               </span>
-              <span className="text-zinc-600 text-[clamp(1rem,3vw,1.5rem)]">
+              <span className="text-zinc-600 text-[clamp(1rem,4vw,1.8rem)]">
                 (FT{config.legsToWin})
               </span>
             </div>
@@ -439,7 +521,10 @@ export default function SlavePage() {
       </div>
 
       {/* Version - tiny */}
-      <div className="absolute bottom-1 left-1 text-[0.6rem] text-zinc-700">
+      <div 
+        className="absolute left-1 text-[0.6rem] text-zinc-700"
+        style={{ bottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
+      >
         {VERSION}
       </div>
     </div>

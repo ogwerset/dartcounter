@@ -8,7 +8,7 @@ import { useGameStore } from '@/lib/stores/game-store';
 import type { GameConfig } from '@/types/game.types';
 import type { DataConnection } from 'peerjs';
 
-const VERSION = 'v1.0.6';
+const VERSION = 'v1.1.0';
 
 const COLORS = [
   { name: 'Blue', value: 'blue-500', hex: '#3b82f6' },
